@@ -9,6 +9,7 @@ class MemoSpace {
   late String name;
   late String memo;
 
+  bool opened = true;
   // late Position location (latitude, longitude)
   // late List<Task> tasks
 }

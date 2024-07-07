@@ -26,6 +26,11 @@ const MemoSpaceSchema = CollectionSchema(
       id: 1,
       name: r'name',
       type: IsarType.string,
+    ),
+    r'opened': PropertySchema(
+      id: 2,
+      name: r'opened',
+      type: IsarType.bool,
     )
   },
   estimateSize: _memoSpaceEstimateSize,
@@ -61,6 +66,7 @@ void _memoSpaceSerialize(
 ) {
   writer.writeString(offsets[0], object.memo);
   writer.writeString(offsets[1], object.name);
+  writer.writeBool(offsets[2], object.opened);
 }
 
 MemoSpace _memoSpaceDeserialize(
@@ -73,6 +79,7 @@ MemoSpace _memoSpaceDeserialize(
   object.id = id;
   object.memo = reader.readString(offsets[0]);
   object.name = reader.readString(offsets[1]);
+  object.opened = reader.readBool(offsets[2]);
   return object;
 }
 
@@ -87,6 +94,8 @@ P _memoSpaceDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 1:
       return (reader.readString(offset)) as P;
+    case 2:
+      return (reader.readBool(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -495,6 +504,16 @@ extension MemoSpaceQueryFilter
       ));
     });
   }
+
+  QueryBuilder<MemoSpace, MemoSpace, QAfterFilterCondition> openedEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'opened',
+        value: value,
+      ));
+    });
+  }
 }
 
 extension MemoSpaceQueryObject
@@ -525,6 +544,18 @@ extension MemoSpaceQuerySortBy on QueryBuilder<MemoSpace, MemoSpace, QSortBy> {
   QueryBuilder<MemoSpace, MemoSpace, QAfterSortBy> sortByNameDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MemoSpace, MemoSpace, QAfterSortBy> sortByOpened() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'opened', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MemoSpace, MemoSpace, QAfterSortBy> sortByOpenedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'opened', Sort.desc);
     });
   }
 }
@@ -566,6 +597,18 @@ extension MemoSpaceQuerySortThenBy
       return query.addSortBy(r'name', Sort.desc);
     });
   }
+
+  QueryBuilder<MemoSpace, MemoSpace, QAfterSortBy> thenByOpened() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'opened', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MemoSpace, MemoSpace, QAfterSortBy> thenByOpenedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'opened', Sort.desc);
+    });
+  }
 }
 
 extension MemoSpaceQueryWhereDistinct
@@ -581,6 +624,12 @@ extension MemoSpaceQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'name', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<MemoSpace, MemoSpace, QDistinct> distinctByOpened() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'opened');
     });
   }
 }
@@ -602,6 +651,12 @@ extension MemoSpaceQueryProperty
   QueryBuilder<MemoSpace, String, QQueryOperations> nameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'name');
+    });
+  }
+
+  QueryBuilder<MemoSpace, bool, QQueryOperations> openedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'opened');
     });
   }
 }

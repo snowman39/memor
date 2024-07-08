@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 import 'package:memor/components/drawer.dart';
 import 'package:memor/models/memo_space.dart';
 import 'package:memor/models/memo_space_database.dart';
@@ -33,8 +35,10 @@ class _MemoPageState extends State<MemoPage> {
     });
   }
 
-  void _updateDatabase() {
-    print("Updating database");
+  void openMemoSpace(MemoSpace memoSpace) {
+    memoSpace.opened = true;
+    updateMemoSpace(memoSpace);
+    setFocusedMemoSpace(memoSpace);
   }
 
   // create memo space
@@ -60,6 +64,9 @@ class _MemoPageState extends State<MemoPage> {
 
   // delete memo space
   void deleteMemoSpace(MemoSpace memoSpace) {
+    if (focusedMemoSpace != null && memoSpace.id == focusedMemoSpace!.id) {
+      focusedMemoSpace = null;
+    }
     context.read<MemoSpaceDatabase>().deleteMemoSpace(memoSpace.id);
   }
 
@@ -75,7 +82,7 @@ class _MemoPageState extends State<MemoPage> {
 
     List<Expanded> openedMemoSpacesWidgets = [];
 
-    BoxDecoration leftMostBox = BoxDecoration(
+    BoxDecoration leftBox = BoxDecoration(
       color: Theme.of(context).colorScheme.surface,
       border: Border(
         top: BorderSide(
@@ -93,7 +100,25 @@ class _MemoPageState extends State<MemoPage> {
       ),
     );
 
-    BoxDecoration rightMostBox = BoxDecoration(
+    BoxDecoration leftFocusedBox = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        right: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
+          color: Theme.of(context).colorScheme.surface,
+          width: 1,
+        ),
+      ),
+    );
+
+    BoxDecoration rightBox = BoxDecoration(
       color: Theme.of(context).colorScheme.surface,
       border: Border(
         top: BorderSide(
@@ -106,6 +131,24 @@ class _MemoPageState extends State<MemoPage> {
         ),
         bottom: BorderSide(
           color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+      ),
+    );
+
+    BoxDecoration rightFocusedBox = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        left: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
+          color: Theme.of(context).colorScheme.surface,
           width: 1,
         ),
       ),
@@ -125,7 +168,7 @@ class _MemoPageState extends State<MemoPage> {
       ),
     );
 
-    BoxDecoration focusedBox = BoxDecoration(
+    BoxDecoration middlefocusedBox = BoxDecoration(
       color: Theme.of(context).colorScheme.surface,
       border: Border(
         top: BorderSide(
@@ -141,14 +184,36 @@ class _MemoPageState extends State<MemoPage> {
 
     for (final (i, memoSpace) in openedMemoSpaces.indexed) {
       BoxDecoration? boxDecoration;
-      if (focusedMemoSpace != null && memoSpace.id == focusedMemoSpace.id) {
-        boxDecoration = focusedBox;
-      } else if (i == 0) {
-        boxDecoration = leftMostBox;
+      bool isFocused =
+          focusedMemoSpace != null && memoSpace.id == focusedMemoSpace.id;
+
+      if (i == 0) {
+        if (openedMemoSpaces.length == 1) {
+          boxDecoration = middlefocusedBox;
+        } else if (isFocused) {
+          boxDecoration = leftFocusedBox;
+        } else {
+          boxDecoration = leftBox;
+        }
       } else if (i == openedMemoSpaces.length - 1) {
-        boxDecoration = rightMostBox;
+        if (openedMemoSpaces.length == 2) {
+          if (isFocused) {
+            boxDecoration = middlefocusedBox;
+          } else {
+            boxDecoration = middleBox;
+          }
+        }
+        if (isFocused) {
+          boxDecoration = rightFocusedBox;
+        } else {
+          boxDecoration = rightBox;
+        }
       } else {
-        boxDecoration = middleBox;
+        if (isFocused) {
+          boxDecoration = middlefocusedBox;
+        } else {
+          boxDecoration = middleBox;
+        }
       }
 
       openedMemoSpacesWidgets.add(
@@ -156,16 +221,44 @@ class _MemoPageState extends State<MemoPage> {
           flex: 2,
           child: Container(
             decoration: boxDecoration,
-            child: TextButton(
-              onPressed: () {
-                setFocusedMemoSpace(memoSpace);
-              },
-              child: Text(
-                memoSpace.name,
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.inversePrimary),
-              ),
-            ),
+            child: Builder(builder: (context) {
+              if (isFocused) {
+                return SizedBox(
+                  height: 32,
+                  child: TextField(
+                    controller: TextEditingController(text: memoSpace.name),
+                    onChanged: (text) {
+                      memoSpace.name = text;
+                      // updateMemoSpace(memoSpace);
+                    },
+                    onTapOutside: (event) {
+                      updateMemoSpace(memoSpace);
+                    },
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.inversePrimary,
+                    ),
+                  ),
+                );
+              }
+              return TextButton(
+                onPressed: () {
+                  setFocusedMemoSpace(memoSpace);
+                },
+                child: Text(
+                  memoSpace.name,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.inversePrimary),
+                ),
+              );
+            }),
           ),
         ),
       );
@@ -175,7 +268,8 @@ class _MemoPageState extends State<MemoPage> {
 
   Container renderCreateMemoSpaceButton() {
     return Container(
-      height: 38,
+      height: 34,
+      width: 34,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border.all(
@@ -187,6 +281,7 @@ class _MemoPageState extends State<MemoPage> {
         onPressed: createMemoSpace,
         icon: const Icon(Icons.add),
         iconSize: 16,
+        splashRadius: 34,
       ),
     );
   }
@@ -209,6 +304,10 @@ class _MemoPageState extends State<MemoPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: TextField(
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.inversePrimary,
+            fontSize: 14,
+          ),
           controller: controller,
           onChanged: (text) {
             focusedMemoSpace.memo = text;
@@ -218,8 +317,6 @@ class _MemoPageState extends State<MemoPage> {
               () => updateMemoSpace(focusedMemoSpace),
             );
           },
-          // onTap
-          // onTapOutside
           maxLines: null,
           decoration: const InputDecoration(
             border: InputBorder.none,
@@ -252,7 +349,10 @@ class _MemoPageState extends State<MemoPage> {
         toolbarHeight: 40,
       ),
       backgroundColor: Theme.of(context).colorScheme.surface,
-      drawer: const MyDrawer(),
+      drawer: MyDrawer(
+          memoSpaces: memoSpaces,
+          onTap: openMemoSpace,
+          onDelete: deleteMemoSpace),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
@@ -263,7 +363,6 @@ class _MemoPageState extends State<MemoPage> {
               renderCreateMemoSpaceButton(),
             ],
           ),
-          // focused memo editor
           renderFocusedMemoEditor(focusedMemoSpace),
         ],
       ),

@@ -69,6 +69,17 @@ flutter:
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
+  fonts:
+    - family: SFProText
+      fonts:
+        - asset: assets/fonts/SF-Pro-Regular.otf
+        - asset: assets/fonts/SF-Pro-Bold.otf
+          weight: 700
+        - asset: assets/fonts/SF-Pro-Italic.otf
+          style: italic
+        - asset: assets/fonts/SF-Pro-Bold-Italic.otf
+          weight: 700
+          style: italic
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

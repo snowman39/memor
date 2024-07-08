@@ -9,6 +9,12 @@ ThemeData lightMode = ThemeData(
     secondary: Colors.grey.shade400,
     inversePrimary: const Color(0xFF454545),
   ),
+  fontFamily: 'SFProText',
+  textSelectionTheme: const TextSelectionThemeData(
+    cursorColor: Colors.lightGreen,
+    selectionColor: Colors.lightGreen,
+    selectionHandleColor: Colors.lightGreen,
+  ),
 );
 
 // dark mode
@@ -19,5 +25,11 @@ ThemeData darkMode = ThemeData(
     primary: const Color.fromARGB(255, 34, 34, 34),
     secondary: const Color.fromARGB(255, 49, 49, 49),
     inversePrimary: Colors.grey.shade300,
+  ),
+  fontFamily: 'SFProText',
+  textSelectionTheme: const TextSelectionThemeData(
+    cursorColor: Colors.lightGreen,
+    selectionColor: Colors.lightGreen,
+    selectionHandleColor: Colors.lightGreen,
   ),
 );

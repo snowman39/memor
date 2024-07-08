@@ -20,8 +20,8 @@ class MemoSpaceDatabase extends ChangeNotifier {
   // Create a new memo space
   Future<void> createMemoSpace() async {
     final memoSpace = MemoSpace()
-      ..name = 'New Memo Space'
-      ..memo = 'type here';
+      ..name = 'New Memospace'
+      ..memo = '';
 
     await isar.writeTxn(() => isar.memoSpaces.put(memoSpace));
     await readMemoSpaces();

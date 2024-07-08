@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:memor/components/drawer.dart';
 import 'package:memor/models/memo_space.dart';
 import 'package:memor/models/memo_space_database.dart';
@@ -17,12 +16,18 @@ class MemoPage extends StatefulWidget {
 
 class _MemoPageState extends State<MemoPage> {
   MemoSpace? focusedMemoSpace;
+  int? textEditorOffset;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
     readMemoSpaces();
+  }
+
+  void _handleShortcut() {
+    // Your custom function here
+    print('Shortcut triggered!');
   }
 
   void setFocusedMemoSpace(MemoSpace memoSpace) {
@@ -298,6 +303,10 @@ class _MemoPageState extends State<MemoPage> {
 
     TextEditingController controller =
         TextEditingController(text: focusedMemoSpace.memo);
+    controller.selection = TextSelection(
+      baseOffset: textEditorOffset ?? 0,
+      extentOffset: textEditorOffset ?? 0,
+    );
 
     return Expanded(
       flex: 10,
@@ -312,10 +321,10 @@ class _MemoPageState extends State<MemoPage> {
           onChanged: (text) {
             focusedMemoSpace.memo = text;
             if (timer?.isActive ?? false) timer?.cancel();
-            timer = Timer(
-              const Duration(seconds: 1),
-              () => updateMemoSpace(focusedMemoSpace),
-            );
+            timer = Timer(const Duration(seconds: 1), () {
+              textEditorOffset = controller.selection.baseOffset;
+              updateMemoSpace(focusedMemoSpace);
+            });
           },
           maxLines: null,
           decoration: const InputDecoration(

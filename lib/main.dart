@@ -27,6 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Memor',
+      debugShowCheckedModeBanner: false,
       home: const MemoPage(),
       theme: Provider.of<ThemeProvider>(context).themeData,
     );

@@ -14,6 +14,14 @@ class MemoPage extends StatefulWidget {
   State<MemoPage> createState() => _MemoPageState();
 }
 
+class MoveFocusedMemoSpaceLeft extends Intent {
+  const MoveFocusedMemoSpaceLeft();
+}
+
+class MoveFocusedMemoSpaceRight extends Intent {
+  const MoveFocusedMemoSpaceRight();
+}
+
 class _MemoPageState extends State<MemoPage> {
   MemoSpace? focusedMemoSpace;
   int? textEditorOffset;
@@ -94,10 +102,6 @@ class _MemoPageState extends State<MemoPage> {
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
         ),
-        right: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
         bottom: BorderSide(
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
@@ -109,46 +113,6 @@ class _MemoPageState extends State<MemoPage> {
       color: Theme.of(context).colorScheme.surface,
       border: Border(
         top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        right: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.surface,
-          width: 1,
-        ),
-      ),
-    );
-
-    BoxDecoration rightBox = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        left: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
-    );
-
-    BoxDecoration rightFocusedBox = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        left: BorderSide(
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
         ),
@@ -166,6 +130,10 @@ class _MemoPageState extends State<MemoPage> {
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
         ),
+        left: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
         bottom: BorderSide(
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
@@ -177,6 +145,10 @@ class _MemoPageState extends State<MemoPage> {
       color: Theme.of(context).colorScheme.surface,
       border: Border(
         top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        left: BorderSide(
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
         ),
@@ -199,19 +171,6 @@ class _MemoPageState extends State<MemoPage> {
           boxDecoration = leftFocusedBox;
         } else {
           boxDecoration = leftBox;
-        }
-      } else if (i == openedMemoSpaces.length - 1) {
-        if (openedMemoSpaces.length == 2) {
-          if (isFocused) {
-            boxDecoration = middlefocusedBox;
-          } else {
-            boxDecoration = middleBox;
-          }
-        }
-        if (isFocused) {
-          boxDecoration = rightFocusedBox;
-        } else {
-          boxDecoration = rightBox;
         }
       } else {
         if (isFocused) {
@@ -340,6 +299,9 @@ class _MemoPageState extends State<MemoPage> {
   Widget build(BuildContext context) {
     final memoSpaceDatabase = context.watch<MemoSpaceDatabase>();
     List<MemoSpace> memoSpaces = memoSpaceDatabase.memoSpaces;
+    List<MemoSpace> openedMemoSpaces = memoSpaces.where((memoSpace) {
+      return memoSpace.opened;
+    }).toList();
 
     if (focusedMemoSpace == null) {
       for (final memoSpace in memoSpaces) {
@@ -350,30 +312,66 @@ class _MemoPageState extends State<MemoPage> {
       }
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        foregroundColor: Theme.of(context).colorScheme.inversePrimary,
-        toolbarHeight: 40,
-      ),
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      drawer: MyDrawer(
-          memoSpaces: memoSpaces,
-          onTap: openMemoSpace,
-          onDelete: deleteMemoSpace),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              ...renderOpenedMemoSpaces(memoSpaces, focusedMemoSpace),
-              renderCreateMemoSpaceButton(),
-            ],
+    return Shortcuts(
+      shortcuts: {
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.bracketLeft):
+            const MoveFocusedMemoSpaceLeft(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.bracketRight):
+            const MoveFocusedMemoSpaceRight(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          MoveFocusedMemoSpaceLeft: CallbackAction<MoveFocusedMemoSpaceLeft>(
+            onInvoke: (_) => setState(
+              () {
+                if (focusedMemoSpace == null) return;
+                int index = openedMemoSpaces.indexOf(focusedMemoSpace!);
+                if (index == 0) return;
+                setFocusedMemoSpace(memoSpaces[index - 1]);
+              },
+            ),
           ),
-          renderFocusedMemoEditor(focusedMemoSpace),
-        ],
+          MoveFocusedMemoSpaceRight: CallbackAction<MoveFocusedMemoSpaceRight>(
+            onInvoke: (_) => setState(
+              () {
+                if (focusedMemoSpace == null) return;
+                int index = openedMemoSpaces.indexOf(focusedMemoSpace!);
+                if (index == memoSpaces.length - 1) return;
+                setFocusedMemoSpace(memoSpaces[index + 1]);
+              },
+            ),
+          ),
+        },
+        child: FocusScope(
+          autofocus: true,
+          // focusNode: FocusNode(),
+          child: Scaffold(
+            appBar: AppBar(
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              foregroundColor: Theme.of(context).colorScheme.inversePrimary,
+              toolbarHeight: 40,
+            ),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            drawer: MyDrawer(
+                memoSpaces: memoSpaces,
+                onTap: openMemoSpace,
+                onDelete: deleteMemoSpace),
+            body: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    ...renderOpenedMemoSpaces(memoSpaces, focusedMemoSpace),
+                    renderCreateMemoSpaceButton(),
+                  ],
+                ),
+                renderFocusedMemoEditor(focusedMemoSpace),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

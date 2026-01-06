@@ -27,7 +27,7 @@ class _MemoPageState extends State<MemoPage> {
   List<bool> hovered = [];
 
   MemoSpace? focusedMemoSpace;
-  TextSelection? textEditorPosition;
+  Map<int, TextSelection> textEditorPositions = {};
   Timer? timer;
 
   @override
@@ -405,11 +405,14 @@ class _MemoPageState extends State<MemoPage> {
 
     TextEditingController controller =
         TextEditingController(text: focusedMemoSpace.memo);
-    controller.selection = textEditorPosition ??
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 0,
-        );
+    TextSelection? savedPosition = textEditorPositions[focusedMemoSpace.id];
+    if (savedPosition != null) {
+      int maxOffset = focusedMemoSpace.memo.length;
+      controller.selection = TextSelection(
+        baseOffset: savedPosition.baseOffset.clamp(0, maxOffset),
+        extentOffset: savedPosition.extentOffset.clamp(0, maxOffset),
+      );
+    }
 
     return Expanded(
       flex: 10,
@@ -425,7 +428,7 @@ class _MemoPageState extends State<MemoPage> {
             focusedMemoSpace.memo = text;
             if (timer?.isActive ?? false) timer?.cancel();
             timer = Timer(const Duration(seconds: 1), () {
-              textEditorPosition = controller.selection;
+              textEditorPositions[focusedMemoSpace.id] = controller.selection;
               updateMemoSpace(focusedMemoSpace);
             });
           },
@@ -460,8 +463,6 @@ class _MemoPageState extends State<MemoPage> {
         focusedMemoSpace = openedMemoSpaces.first;
       }
     }
-
-    
 
     return Shortcuts(
       shortcuts: {

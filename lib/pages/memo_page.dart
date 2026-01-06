@@ -14,28 +14,26 @@ class MemoPage extends StatefulWidget {
   State<MemoPage> createState() => _MemoPageState();
 }
 
-class MoveFocusedMemoSpaceLeft extends Intent {
-  const MoveFocusedMemoSpaceLeft();
+class ShiftFocusToLeft extends Intent {
+  const ShiftFocusToLeft();
 }
 
-class MoveFocusedMemoSpaceRight extends Intent {
-  const MoveFocusedMemoSpaceRight();
+class ShiftFocusToRight extends Intent {
+  const ShiftFocusToRight();
 }
 
 class _MemoPageState extends State<MemoPage> {
+  List<MemoSpace> openedMemoSpaces = [];
+  List<bool> hovered = [];
+
   MemoSpace? focusedMemoSpace;
-  int? textEditorOffset;
+  TextSelection? textEditorPosition;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
     readMemoSpaces();
-  }
-
-  void _handleShortcut() {
-    // Your custom function here
-    print('Shortcut triggered!');
   }
 
   void setFocusedMemoSpace(MemoSpace memoSpace) {
@@ -48,25 +46,44 @@ class _MemoPageState extends State<MemoPage> {
     });
   }
 
+  void dragMemoSpace(int from, int to) {
+    final MemoSpace item = openedMemoSpaces.removeAt(from);
+    openedMemoSpaces.insert(to, item);
+    setFocusedMemoSpace(openedMemoSpaces[to]);
+  }
+
   void openMemoSpace(MemoSpace memoSpace) {
+    openedMemoSpaces.add(memoSpace);
     memoSpace.opened = true;
     updateMemoSpace(memoSpace);
     setFocusedMemoSpace(memoSpace);
   }
 
-  // create memo space
+  void closeMemoSpace(MemoSpace memoSpace) {
+    int index = openedMemoSpaces.indexOf(memoSpace);
+    if (focusedMemoSpace != null && memoSpace.id == focusedMemoSpace!.id) {
+      if (index == 0 && openedMemoSpaces.length > 1) {
+        setFocusedMemoSpace(openedMemoSpaces[1]);
+      } else if (index > 0) {
+        setFocusedMemoSpace(openedMemoSpaces[index - 1]);
+      } else {
+        focusedMemoSpace = null;
+      }
+    }
+    memoSpace.opened = false;
+    updateMemoSpace(memoSpace);
+    openedMemoSpaces.remove(memoSpace);
+    hovered.removeAt(index);
+  }
+
   void createMemoSpace() {
-    // create a new empty memo space
     context.read<MemoSpaceDatabase>().createMemoSpace();
   }
 
-  // read memo spaces
   void readMemoSpaces() {
-    // read all memo spaces
     context.read<MemoSpaceDatabase>().readMemoSpaces();
   }
 
-  // update memo space
   void updateMemoSpace(MemoSpace memoSpace) {
     context.read<MemoSpaceDatabase>().updateMemoSpace(
           memoSpace.id,
@@ -75,7 +92,6 @@ class _MemoPageState extends State<MemoPage> {
         );
   }
 
-  // delete memo space
   void deleteMemoSpace(MemoSpace memoSpace) {
     if (focusedMemoSpace != null && memoSpace.id == focusedMemoSpace!.id) {
       focusedMemoSpace = null;
@@ -83,189 +99,317 @@ class _MemoPageState extends State<MemoPage> {
     context.read<MemoSpaceDatabase>().deleteMemoSpace(memoSpace.id);
   }
 
-  // TODO: refactor this function into a separate widget file
-  List<Expanded> renderOpenedMemoSpaces(
-      List<MemoSpace> memoSpaces, MemoSpace? focusedMemoSpace) {
-    List<MemoSpace> openedMemoSpaces = [];
-    for (final memoSpace in memoSpaces) {
-      if (memoSpace.opened) {
-        openedMemoSpaces.add(memoSpace);
-      }
-    }
-
-    List<Expanded> openedMemoSpacesWidgets = [];
-
-    BoxDecoration leftBox = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
-    );
-
-    BoxDecoration leftFocusedBox = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.surface,
-          width: 1,
-        ),
-      ),
-    );
-
-    BoxDecoration middleBox = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        left: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
-    );
-
-    BoxDecoration middlefocusedBox = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        left: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.surface,
-          width: 1,
-        ),
-      ),
-    );
-
-    for (final (i, memoSpace) in openedMemoSpaces.indexed) {
-      BoxDecoration? boxDecoration;
-      bool isFocused =
-          focusedMemoSpace != null && memoSpace.id == focusedMemoSpace.id;
-
-      if (i == 0) {
-        if (openedMemoSpaces.length == 1) {
-          boxDecoration = middlefocusedBox;
-        } else if (isFocused) {
-          boxDecoration = leftFocusedBox;
-        } else {
-          boxDecoration = leftBox;
-        }
-      } else {
-        if (isFocused) {
-          boxDecoration = middlefocusedBox;
-        } else {
-          boxDecoration = middleBox;
-        }
-      }
-
-      openedMemoSpacesWidgets.add(
-        Expanded(
-          flex: 2,
-          child: Container(
-            decoration: boxDecoration,
-            child: Builder(builder: (context) {
-              if (isFocused) {
-                return SizedBox(
-                  height: 32,
-                  child: TextField(
-                    controller: TextEditingController(text: memoSpace.name),
-                    onChanged: (text) {
-                      memoSpace.name = text;
-                      // updateMemoSpace(memoSpace);
-                    },
-                    onTapOutside: (event) {
-                      updateMemoSpace(memoSpace);
-                    },
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.inversePrimary,
-                    ),
-                  ),
-                );
-              }
-              return TextButton(
-                onPressed: () {
-                  setFocusedMemoSpace(memoSpace);
-                },
-                child: Text(
-                  memoSpace.name,
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.inversePrimary),
-                ),
-              );
-            }),
-          ),
+  SizedBox openedMemoSpaceTabs(
+      List<MemoSpace> openedMemoSpaces, MemoSpace? focusedMemoSpace) {
+    if (openedMemoSpaces.isEmpty) {
+      return const SizedBox(
+        height: 32,
+        child: Center(
+          child: Text('No memospace opened'),
         ),
       );
     }
-    return openedMemoSpacesWidgets;
-  }
 
-  Container renderCreateMemoSpaceButton() {
-    return Container(
-      height: 34,
-      width: 34,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border.all(
+    BoxDecoration leftTab = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
           color: Theme.of(context).colorScheme.inversePrimary,
           width: 1,
         ),
       ),
-      child: IconButton(
-        onPressed: createMemoSpace,
-        icon: const Icon(Icons.add),
-        iconSize: 16,
-        splashRadius: 34,
+    );
+
+    BoxDecoration leftFocusedTab = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
+          color: Theme.of(context).colorScheme.surface,
+          width: 1,
+        ),
+      ),
+    );
+
+    BoxDecoration middleTab = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        left: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+      ),
+    );
+
+    BoxDecoration middleFocusedTab = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        left: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
+          color: Theme.of(context).colorScheme.surface,
+          width: 1,
+        ),
+      ),
+    );
+
+    BoxDecoration draggedTab = BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        bottom: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        left: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+        right: BorderSide(
+          color: Theme.of(context).colorScheme.inversePrimary,
+          width: 1,
+        ),
+      ),
+    );
+
+    return SizedBox(
+      height: 32,
+      width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            shrinkWrap: true,
+            physics: const ScrollPhysics(),
+            itemCount: (openedMemoSpaces.length + 1),
+            itemBuilder: (context, i) {
+              if (i == openedMemoSpaces.length) {
+                return createMemoSpaceButton();
+              }
+              bool isFocused = openedMemoSpaces.indexOf(focusedMemoSpace!) == i;
+              return DragTarget<int>(
+                onAcceptWithDetails: (from) {
+                  dragMemoSpace(from.data, i);
+                },
+                builder: (context, _, __) {
+                  return Draggable<int>(
+                    data: i,
+                    feedback: Material(
+                      child: Container(
+                        height: 32,
+                        width: (constraints.maxWidth - 34) /
+                            openedMemoSpaces.length,
+                        decoration: draggedTab,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (isFocused)
+                              Expanded(
+                                child: TextField(
+                                  controller: TextEditingController(
+                                      text: openedMemoSpaces[i].name),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding:
+                                        EdgeInsets.symmetric(vertical: 9),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .inversePrimary,
+                                  ),
+                                ),
+                              )
+                            else
+                              TextButton(
+                                onPressed: () {
+                                  setFocusedMemoSpace(openedMemoSpaces[i]);
+                                },
+                                child: Text(
+                                  openedMemoSpaces[i].name,
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .inversePrimary),
+                                ),
+                              ),
+                            IconButton(
+                              icon: Icon(Icons.close,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .inversePrimary),
+                              onPressed: () {},
+                              iconSize: 16,
+                              splashRadius: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    childWhenDragging: const SizedBox(
+                      height: 32,
+                    ),
+                    child: MouseRegion(
+                      onEnter: (event) {
+                        setState(() {
+                          hovered[i] = true;
+                        });
+                      },
+                      onExit: (event) {
+                        setState(() {
+                          hovered[i] = false;
+                        });
+                      },
+                      child: Container(
+                        width: (constraints.maxWidth - 34) /
+                            openedMemoSpaces.length,
+                        decoration: (i == 0)
+                            ? (openedMemoSpaces.length == 1)
+                                ? middleFocusedTab
+                                : (isFocused)
+                                    ? leftFocusedTab
+                                    : leftTab
+                            : (isFocused)
+                                ? middleFocusedTab
+                                : middleTab,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: isFocused
+                              ? [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: TextEditingController(
+                                          text: openedMemoSpaces[i].name),
+                                      onChanged: (text) {
+                                        openedMemoSpaces[i].name = text;
+                                      },
+                                      onTapOutside: (event) {
+                                        updateMemoSpace(openedMemoSpaces[i]);
+                                      },
+                                      decoration: const InputDecoration(
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding:
+                                            EdgeInsets.symmetric(vertical: 9),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .inversePrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  closeMemoSpaceButton(openedMemoSpaces[i]),
+                                ]
+                              : [
+                                  TextButton(
+                                    onPressed: () {
+                                      setFocusedMemoSpace(openedMemoSpaces[i]);
+                                    },
+                                    child: Text(
+                                      openedMemoSpaces[i].name,
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .inversePrimary),
+                                    ),
+                                  ),
+                                  hovered[i]
+                                      ? closeMemoSpaceButton(
+                                          openedMemoSpaces[i])
+                                      : const SizedBox(),
+                                ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }
 
-  Expanded renderFocusedMemoEditor(MemoSpace? focusedMemoSpace) {
+  IconButton closeMemoSpaceButton(MemoSpace memoSpace) {
+    return IconButton(
+      icon: const Icon(Icons.close),
+      onPressed: () => closeMemoSpace(memoSpace),
+      iconSize: 16,
+      splashRadius: 20,
+    );
+  }
+
+  SizedBox createMemoSpaceButton() {
+    return SizedBox(
+      child: Container(
+        height: 34,
+        width: 34,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.inversePrimary,
+            width: 1,
+          ),
+        ),
+        child: IconButton(
+          onPressed: createMemoSpace,
+          icon: const Icon(Icons.add),
+          iconSize: 16,
+          splashRadius: 34,
+        ),
+      ),
+    );
+  }
+
+  Expanded focusedMemoEditor(MemoSpace? focusedMemoSpace) {
     if (focusedMemoSpace == null) {
       return const Expanded(
-        flex: 10,
         child: Center(
-          child: Text('No memo space opened'),
+          child: Text('No memospace opened'),
         ),
       );
     }
 
     TextEditingController controller =
         TextEditingController(text: focusedMemoSpace.memo);
-    controller.selection = TextSelection(
-      baseOffset: textEditorOffset ?? 0,
-      extentOffset: textEditorOffset ?? 0,
-    );
+    controller.selection = textEditorPosition ??
+        const TextSelection(
+          baseOffset: 0,
+          extentOffset: 0,
+        );
 
     return Expanded(
       flex: 10,
@@ -281,7 +425,7 @@ class _MemoPageState extends State<MemoPage> {
             focusedMemoSpace.memo = text;
             if (timer?.isActive ?? false) timer?.cancel();
             timer = Timer(const Duration(seconds: 1), () {
-              textEditorOffset = controller.selection.baseOffset;
+              textEditorPosition = controller.selection;
               updateMemoSpace(focusedMemoSpace);
             });
           },
@@ -299,75 +443,74 @@ class _MemoPageState extends State<MemoPage> {
   Widget build(BuildContext context) {
     final memoSpaceDatabase = context.watch<MemoSpaceDatabase>();
     List<MemoSpace> memoSpaces = memoSpaceDatabase.memoSpaces;
-    List<MemoSpace> openedMemoSpaces = memoSpaces.where((memoSpace) {
-      return memoSpace.opened;
-    }).toList();
+    if (openedMemoSpaces.isEmpty) {
+      openedMemoSpaces = memoSpaces.where((memoSpace) {
+        return memoSpace.opened;
+      }).toList();
+    }
 
-    if (focusedMemoSpace == null) {
-      for (final memoSpace in memoSpaces) {
-        if (memoSpace.opened) {
-          focusedMemoSpace = memoSpace;
-          break;
-        }
+    if (hovered.isEmpty) {
+      for (MemoSpace _ in openedMemoSpaces) {
+        hovered.add(false);
       }
     }
+
+    if (focusedMemoSpace == null) {
+      if (openedMemoSpaces.isNotEmpty) {
+        focusedMemoSpace = openedMemoSpaces.first;
+      }
+    }
+
+    
 
     return Shortcuts(
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.bracketLeft):
-            const MoveFocusedMemoSpaceLeft(),
+            const ShiftFocusToLeft(),
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.bracketRight):
-            const MoveFocusedMemoSpaceRight(),
+            const ShiftFocusToRight(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          MoveFocusedMemoSpaceLeft: CallbackAction<MoveFocusedMemoSpaceLeft>(
+          ShiftFocusToLeft: CallbackAction<ShiftFocusToLeft>(
             onInvoke: (_) => setState(
               () {
-                if (focusedMemoSpace == null) return;
-                int index = openedMemoSpaces.indexOf(focusedMemoSpace!);
-                if (index == 0) return;
-                setFocusedMemoSpace(memoSpaces[index - 1]);
+                if (openedMemoSpaces.isEmpty ||
+                    focusedMemoSpace! == openedMemoSpaces.first) return;
+                setFocusedMemoSpace(openedMemoSpaces[
+                    openedMemoSpaces.indexOf(focusedMemoSpace!) - 1]);
               },
             ),
           ),
-          MoveFocusedMemoSpaceRight: CallbackAction<MoveFocusedMemoSpaceRight>(
+          ShiftFocusToRight: CallbackAction<ShiftFocusToRight>(
             onInvoke: (_) => setState(
               () {
-                if (focusedMemoSpace == null) return;
-                int index = openedMemoSpaces.indexOf(focusedMemoSpace!);
-                if (index == memoSpaces.length - 1) return;
-                setFocusedMemoSpace(memoSpaces[index + 1]);
+                if (openedMemoSpaces.isEmpty ||
+                    focusedMemoSpace! == openedMemoSpaces.last) return;
+                setFocusedMemoSpace(openedMemoSpaces[
+                    openedMemoSpaces.indexOf(focusedMemoSpace!) + 1]);
               },
             ),
           ),
         },
         child: FocusScope(
           autofocus: true,
-          // focusNode: FocusNode(),
           child: Scaffold(
             appBar: AppBar(
               elevation: 0,
-              backgroundColor: Colors.transparent,
-              foregroundColor: Theme.of(context).colorScheme.inversePrimary,
               toolbarHeight: 40,
             ),
             backgroundColor: Theme.of(context).colorScheme.surface,
             drawer: MyDrawer(
-                memoSpaces: memoSpaces,
-                onTap: openMemoSpace,
-                onDelete: deleteMemoSpace),
+              memoSpaces: memoSpaces,
+              onTap: openMemoSpace,
+              onDelete: deleteMemoSpace,
+            ),
             body: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    ...renderOpenedMemoSpaces(memoSpaces, focusedMemoSpace),
-                    renderCreateMemoSpaceButton(),
-                  ],
-                ),
-                renderFocusedMemoEditor(focusedMemoSpace),
+                openedMemoSpaceTabs(openedMemoSpaces, focusedMemoSpace),
+                focusedMemoEditor(focusedMemoSpace),
               ],
             ),
           ),

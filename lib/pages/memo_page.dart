@@ -54,7 +54,15 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   void openMemoSpace(MemoSpace memoSpace) {
+    // 이미 열려있는 탭이면 해당 인스턴스로 포커스 이동
+    final existingTab =
+        openedMemoSpaces.where((m) => m.id == memoSpace.id).firstOrNull;
+    if (existingTab != null) {
+      setFocusedMemoSpace(existingTab);
+      return;
+    }
     openedMemoSpaces.add(memoSpace);
+    hovered.add(false);
     memoSpace.opened = true;
     updateMemoSpace(memoSpace);
     setFocusedMemoSpace(memoSpace);
@@ -77,8 +85,10 @@ class _MemoPageState extends State<MemoPage> {
     hovered.removeAt(index);
   }
 
-  void createMemoSpace() {
-    context.read<MemoSpaceDatabase>().createMemoSpace();
+  void createMemoSpace() async {
+    final newMemoSpace =
+        await context.read<MemoSpaceDatabase>().createMemoSpace();
+    openMemoSpace(newMemoSpace);
   }
 
   void readMemoSpaces() {
@@ -94,8 +104,24 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   void deleteMemoSpace(MemoSpace memoSpace) {
-    if (focusedMemoSpace != null && memoSpace.id == focusedMemoSpace!.id) {
-      focusedMemoSpace = null;
+    // 열려있는 탭이면 닫기 (updateMemoSpace 없이)
+    final openedTab =
+        openedMemoSpaces.where((m) => m.id == memoSpace.id).firstOrNull;
+    if (openedTab != null) {
+      int index = openedMemoSpaces.indexOf(openedTab);
+      if (focusedMemoSpace != null && openedTab.id == focusedMemoSpace!.id) {
+        if (index == 0 && openedMemoSpaces.length > 1) {
+          setFocusedMemoSpace(openedMemoSpaces[1]);
+        } else if (index > 0) {
+          setFocusedMemoSpace(openedMemoSpaces[index - 1]);
+        } else {
+          focusedMemoSpace = null;
+        }
+      }
+      openedMemoSpaces.remove(openedTab);
+      if (index >= 0 && index < hovered.length) {
+        hovered.removeAt(index);
+      }
     }
     context.read<MemoSpaceDatabase>().deleteMemoSpace(memoSpace.id);
   }
@@ -308,7 +334,7 @@ class _MemoPageState extends State<MemoPage> {
                             if (editingTabId == openedMemoSpaces[i].id)
                               Padding(
                                 padding:
-                                    const EdgeInsets.symmetric(horizontal: 32),
+                                    const EdgeInsets.only(left: 12, right: 32),
                                 child: Focus(
                                   onFocusChange: (hasFocus) {
                                     if (!hasFocus) {
@@ -337,7 +363,7 @@ class _MemoPageState extends State<MemoPage> {
                                       contentPadding:
                                           EdgeInsets.symmetric(vertical: 9),
                                     ),
-                                    textAlign: TextAlign.center,
+                                    textAlign: TextAlign.left,
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
@@ -363,12 +389,12 @@ class _MemoPageState extends State<MemoPage> {
                                   },
                                   child: Container(
                                     color: Colors.transparent,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 32),
-                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.only(
+                                        left: 12, right: 32),
+                                    alignment: Alignment.centerLeft,
                                     child: Text(
                                       openedMemoSpaces[i].name,
-                                      textAlign: TextAlign.center,
+                                      textAlign: TextAlign.left,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontSize: 14,
@@ -406,12 +432,20 @@ class _MemoPageState extends State<MemoPage> {
     );
   }
 
-  IconButton closeMemoSpaceButton(MemoSpace memoSpace) {
-    return IconButton(
-      icon: const Icon(Icons.close),
-      onPressed: () => closeMemoSpace(memoSpace),
-      iconSize: 16,
-      splashRadius: 20,
+  Widget closeMemoSpaceButton(MemoSpace memoSpace) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => closeMemoSpace(memoSpace),
+          child: const Center(
+            child: Icon(Icons.close, size: 14),
+          ),
+        ),
+      ),
     );
   }
 

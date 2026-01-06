@@ -49,6 +49,17 @@ class MemoSpaceDatabase extends ChangeNotifier {
     await readMemoSpaces();
   }
 
+  // Update opened state only (no full refresh)
+  Future<void> updateOpenedState(int id, bool opened) async {
+    final memoSpace = await isar.memoSpaces.get(id);
+    if (memoSpace == null) {
+      return;
+    }
+
+    memoSpace.opened = opened;
+    await isar.writeTxn(() => isar.memoSpaces.put(memoSpace));
+  }
+
   // Delete a memo space
   Future<void> deleteMemoSpace(int id) async {
     await isar.writeTxn(() => isar.memoSpaces.delete(id));

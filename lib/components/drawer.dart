@@ -20,10 +20,19 @@ class MyDrawer extends StatelessWidget {
     return memoSpaces
         .map((memoSpace) => DrawerTile(
               title: memoSpace.name,
-              trailing: IconButton(
-                icon: const Icon(Icons.delete),
-                iconSize: 18,
-                onPressed: () => onDelete!(memoSpace),
+              trailing: SizedBox(
+                width: 28,
+                height: 28,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => onDelete!(memoSpace),
+                    child: const Center(
+                      child: Icon(Icons.delete, size: 16),
+                    ),
+                  ),
+                ),
               ),
               onTap: () => onTap!(memoSpace),
             ))

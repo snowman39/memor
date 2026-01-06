@@ -29,6 +29,7 @@ class _MemoPageState extends State<MemoPage> {
   MemoSpace? focusedMemoSpace;
   Map<int, TextSelection> textEditorPositions = {};
   Timer? timer;
+  int? editingTabId;
 
   @override
   void initState() {
@@ -300,56 +301,98 @@ class _MemoPageState extends State<MemoPage> {
                             : (isFocused)
                                 ? middleFocusedTab
                                 : middleTab,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: isFocused
-                              ? [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: TextEditingController(
-                                          text: openedMemoSpaces[i].name),
-                                      onChanged: (text) {
-                                        openedMemoSpaces[i].name = text;
-                                      },
-                                      onTapOutside: (event) {
-                                        updateMemoSpace(openedMemoSpaces[i]);
-                                      },
-                                      decoration: const InputDecoration(
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding:
-                                            EdgeInsets.symmetric(vertical: 9),
-                                      ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // 탭 제목 (편집 모드)
+                            if (editingTabId == openedMemoSpaces[i].id)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 32),
+                                child: Focus(
+                                  onFocusChange: (hasFocus) {
+                                    if (!hasFocus) {
+                                      updateMemoSpace(openedMemoSpaces[i]);
+                                      setState(() {
+                                        editingTabId = null;
+                                      });
+                                    }
+                                  },
+                                  child: TextField(
+                                    controller: TextEditingController(
+                                        text: openedMemoSpaces[i].name),
+                                    autofocus: true,
+                                    onChanged: (text) {
+                                      openedMemoSpaces[i].name = text;
+                                    },
+                                    onSubmitted: (text) {
+                                      updateMemoSpace(openedMemoSpaces[i]);
+                                      setState(() {
+                                        editingTabId = null;
+                                      });
+                                    },
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding:
+                                          EdgeInsets.symmetric(vertical: 9),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .inversePrimary,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            // 탭 제목 (일반 모드)
+                            else
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setFocusedMemoSpace(openedMemoSpaces[i]);
+                                  },
+                                  onDoubleTap: () {
+                                    setFocusedMemoSpace(openedMemoSpaces[i]);
+                                    setState(() {
+                                      editingTabId = openedMemoSpaces[i].id;
+                                    });
+                                  },
+                                  child: Container(
+                                    color: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 32),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      openedMemoSpaces[i].name,
                                       textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: isFocused
+                                            ? FontWeight.w700
+                                            : FontWeight.normal,
                                         color: Theme.of(context)
                                             .colorScheme
                                             .inversePrimary,
                                       ),
                                     ),
                                   ),
-                                  closeMemoSpaceButton(openedMemoSpaces[i]),
-                                ]
-                              : [
-                                  TextButton(
-                                    onPressed: () {
-                                      setFocusedMemoSpace(openedMemoSpaces[i]);
-                                    },
-                                    child: Text(
-                                      openedMemoSpaces[i].name,
-                                      style: TextStyle(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .inversePrimary),
-                                    ),
-                                  ),
-                                  hovered[i]
-                                      ? closeMemoSpaceButton(
-                                          openedMemoSpaces[i])
-                                      : const SizedBox(),
-                                ],
+                                ),
+                              ),
+                            // X 버튼 (오른쪽 고정)
+                            Positioned(
+                              right: 0,
+                              child: Opacity(
+                                opacity: (isFocused || hovered[i]) ? 1.0 : 0.0,
+                                child:
+                                    closeMemoSpaceButton(openedMemoSpaces[i]),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

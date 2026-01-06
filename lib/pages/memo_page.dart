@@ -273,255 +273,298 @@ class _MemoPageState extends State<MemoPage> {
                               onAcceptWithDetails: (from) {
                                 dragMemoSpace(from.data, i);
                               },
-                              builder: (context, _, __) {
-                                return Draggable<int>(
-                                  data: i,
-                                  feedback: Material(
-                                    child: Container(
-                                      height: 32,
-                                      width: tabWidth,
-                                      decoration: draggedTab,
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          if (isFocused)
-                                            Expanded(
-                                              child: TextField(
-                                                controller:
-                                                    TextEditingController(
-                                                        text:
-                                                            openedMemoSpaces[i]
-                                                                .name),
-                                                decoration:
-                                                    const InputDecoration(
-                                                  border: InputBorder.none,
-                                                  isDense: true,
-                                                  contentPadding:
-                                                      EdgeInsets.symmetric(
-                                                          vertical: 9),
-                                                ),
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .inversePrimary,
-                                                ),
-                                              ),
-                                            )
-                                          else
-                                            TextButton(
-                                              onPressed: () {
-                                                setFocusedMemoSpace(
-                                                    openedMemoSpaces[i]);
-                                              },
-                                              child: Text(
-                                                openedMemoSpaces[i].name,
-                                                style: TextStyle(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .inversePrimary),
-                                              ),
-                                            ),
-                                          IconButton(
-                                            icon: Icon(Icons.close,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .inversePrimary),
-                                            onPressed: () {},
-                                            iconSize: 16,
-                                            splashRadius: 20,
-                                          ),
-                                        ],
+                              builder: (context, candidateData, __) {
+                                final isDropTarget = candidateData.isNotEmpty &&
+                                    candidateData.first != i &&
+                                    candidateData.first != i - 1;
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // 드롭 위치 하이라이트 (왼쪽)
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      width: isDropTarget ? 3 : 0,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: isDropTarget
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(2),
                                       ),
                                     ),
-                                  ),
-                                  childWhenDragging: Container(
-                                    height: 32,
-                                    width: tabWidth,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surface
-                                          .withOpacity(0.5),
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .inversePrimary,
-                                          width: 1,
-                                        ),
-                                        bottom: BorderSide(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .inversePrimary,
-                                          width: 1,
-                                        ),
-                                        left: i == 0
-                                            ? BorderSide.none
-                                            : BorderSide(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .inversePrimary,
-                                                width: 1,
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-                                  child: MouseRegion(
-                                    onEnter: (event) {
-                                      setState(() {
-                                        hovered[i] = true;
-                                      });
-                                    },
-                                    onExit: (event) {
-                                      setState(() {
-                                        hovered[i] = false;
-                                      });
-                                    },
-                                    child: Container(
-                                      width: tabWidth,
-                                      height: isFocused ? 31 : 30,
-                                      decoration: (i == 0)
-                                          ? (openedMemoSpaces.length == 1)
-                                              ? middleFocusedTab
-                                              : (isFocused)
-                                                  ? leftFocusedTab
-                                                  : leftTab
-                                          : (isFocused)
-                                              ? middleFocusedTab
-                                              : middleTab,
-                                      child: Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          // 탭 제목 (편집 모드)
-                                          if (editingTabId ==
-                                              openedMemoSpaces[i].id)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                  left: 12, right: 32),
-                                              child: Focus(
-                                                onFocusChange: (hasFocus) {
-                                                  if (!hasFocus) {
-                                                    updateMemoSpace(
-                                                        openedMemoSpaces[i]);
-                                                    setState(() {
-                                                      editingTabId = null;
-                                                    });
-                                                  }
-                                                },
-                                                child: TextField(
-                                                  controller:
-                                                      TextEditingController(
-                                                          text:
-                                                              openedMemoSpaces[
-                                                                      i]
-                                                                  .name),
-                                                  autofocus: true,
-                                                  onChanged: (text) {
-                                                    openedMemoSpaces[i].name =
-                                                        text;
-                                                  },
-                                                  onSubmitted: (text) {
-                                                    updateMemoSpace(
-                                                        openedMemoSpaces[i]);
-                                                    setState(() {
-                                                      editingTabId = null;
-                                                    });
-                                                  },
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    border: InputBorder.none,
-                                                    isDense: true,
-                                                    contentPadding:
-                                                        EdgeInsets.symmetric(
-                                                            vertical: 9),
-                                                  ),
-                                                  textAlign: TextAlign.left,
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .inversePrimary,
-                                                  ),
-                                                ),
-                                              ),
-                                            )
-                                          // 탭 제목 (일반 모드)
-                                          else
-                                            Positioned.fill(
-                                              child: GestureDetector(
-                                                onTap: () {
-                                                  final now = DateTime.now();
-                                                  final tabId =
-                                                      openedMemoSpaces[i].id;
-
-                                                  // 더블탭 감지 (300ms 이내 같은 탭 클릭)
-                                                  if (_lastTappedTabId ==
-                                                          tabId &&
-                                                      _lastTapTime != null &&
-                                                      now
-                                                              .difference(
-                                                                  _lastTapTime!)
-                                                              .inMilliseconds <
-                                                          300) {
-                                                    // 더블탭 - 편집 모드
-                                                    setState(() {
-                                                      editingTabId = tabId;
-                                                    });
-                                                    _lastTappedTabId = null;
-                                                    _lastTapTime = null;
-                                                  } else {
-                                                    // 싱글탭 - 포커스 이동
-                                                    setFocusedMemoSpace(
-                                                        openedMemoSpaces[i]);
-                                                    _lastTappedTabId = tabId;
-                                                    _lastTapTime = now;
-                                                  }
-                                                },
-                                                child: Container(
-                                                  color: Colors.transparent,
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          left: 12, right: 32),
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                  child: Text(
-                                                    openedMemoSpaces[i].name,
-                                                    textAlign: TextAlign.left,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
+                                    Draggable<int>(
+                                      data: i,
+                                      feedback: Material(
+                                        child: Container(
+                                          height: 32,
+                                          width: tabWidth,
+                                          decoration: draggedTab,
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              if (isFocused)
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller:
+                                                        TextEditingController(
+                                                            text:
+                                                                openedMemoSpaces[
+                                                                        i]
+                                                                    .name),
+                                                    decoration:
+                                                        const InputDecoration(
+                                                      border: InputBorder.none,
+                                                      isDense: true,
+                                                      contentPadding:
+                                                          EdgeInsets.symmetric(
+                                                              vertical: 9),
+                                                    ),
+                                                    textAlign: TextAlign.center,
                                                     style: TextStyle(
                                                       fontSize: 14,
-                                                      fontWeight: isFocused
-                                                          ? FontWeight.w700
-                                                          : FontWeight.normal,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                       color: Theme.of(context)
                                                           .colorScheme
                                                           .inversePrimary,
                                                     ),
                                                   ),
+                                                )
+                                              else
+                                                TextButton(
+                                                  onPressed: () {
+                                                    setFocusedMemoSpace(
+                                                        openedMemoSpaces[i]);
+                                                  },
+                                                  child: Text(
+                                                    openedMemoSpaces[i].name,
+                                                    style: TextStyle(
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .inversePrimary),
+                                                  ),
+                                                ),
+                                              IconButton(
+                                                icon: Icon(Icons.close,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .inversePrimary),
+                                                onPressed: () {},
+                                                iconSize: 16,
+                                                splashRadius: 20,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      childWhenDragging: Container(
+                                        height: 32,
+                                        width: tabWidth,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surface
+                                              .withOpacity(0.5),
+                                          border: Border(
+                                            top: BorderSide(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .inversePrimary,
+                                              width: 1,
+                                            ),
+                                            bottom: BorderSide(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .inversePrimary,
+                                              width: 1,
+                                            ),
+                                            left: i == 0
+                                                ? BorderSide.none
+                                                : BorderSide(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .inversePrimary,
+                                                    width: 1,
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                      child: MouseRegion(
+                                        onEnter: (event) {
+                                          setState(() {
+                                            hovered[i] = true;
+                                          });
+                                        },
+                                        onExit: (event) {
+                                          setState(() {
+                                            hovered[i] = false;
+                                          });
+                                        },
+                                        child: Container(
+                                          width: tabWidth,
+                                          height: isFocused ? 31 : 30,
+                                          decoration: (i == 0)
+                                              ? (openedMemoSpaces.length == 1)
+                                                  ? middleFocusedTab
+                                                  : (isFocused)
+                                                      ? leftFocusedTab
+                                                      : leftTab
+                                              : (isFocused)
+                                                  ? middleFocusedTab
+                                                  : middleTab,
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              // 탭 제목 (편집 모드)
+                                              if (editingTabId ==
+                                                  openedMemoSpaces[i].id)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          left: 12, right: 32),
+                                                  child: Focus(
+                                                    onFocusChange: (hasFocus) {
+                                                      if (!hasFocus) {
+                                                        updateMemoSpace(
+                                                            openedMemoSpaces[
+                                                                i]);
+                                                        setState(() {
+                                                          editingTabId = null;
+                                                        });
+                                                      }
+                                                    },
+                                                    child: TextField(
+                                                      controller:
+                                                          TextEditingController(
+                                                              text:
+                                                                  openedMemoSpaces[
+                                                                          i]
+                                                                      .name),
+                                                      autofocus: true,
+                                                      onChanged: (text) {
+                                                        openedMemoSpaces[i]
+                                                            .name = text;
+                                                      },
+                                                      onSubmitted: (text) {
+                                                        updateMemoSpace(
+                                                            openedMemoSpaces[
+                                                                i]);
+                                                        setState(() {
+                                                          editingTabId = null;
+                                                        });
+                                                      },
+                                                      decoration:
+                                                          const InputDecoration(
+                                                        border:
+                                                            InputBorder.none,
+                                                        isDense: true,
+                                                        contentPadding:
+                                                            EdgeInsets
+                                                                .symmetric(
+                                                                    vertical:
+                                                                        9),
+                                                      ),
+                                                      textAlign: TextAlign.left,
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .inversePrimary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                              // 탭 제목 (일반 모드)
+                                              else
+                                                Positioned.fill(
+                                                  child: GestureDetector(
+                                                    onTap: () {
+                                                      final now =
+                                                          DateTime.now();
+                                                      final tabId =
+                                                          openedMemoSpaces[i]
+                                                              .id;
+
+                                                      // 더블탭 감지 (300ms 이내 같은 탭 클릭)
+                                                      if (_lastTappedTabId ==
+                                                              tabId &&
+                                                          _lastTapTime !=
+                                                              null &&
+                                                          now
+                                                                  .difference(
+                                                                      _lastTapTime!)
+                                                                  .inMilliseconds <
+                                                              300) {
+                                                        // 더블탭 - 편집 모드
+                                                        setState(() {
+                                                          editingTabId = tabId;
+                                                        });
+                                                        _lastTappedTabId = null;
+                                                        _lastTapTime = null;
+                                                      } else {
+                                                        // 싱글탭 - 포커스 이동
+                                                        setFocusedMemoSpace(
+                                                            openedMemoSpaces[
+                                                                i]);
+                                                        _lastTappedTabId =
+                                                            tabId;
+                                                        _lastTapTime = now;
+                                                      }
+                                                    },
+                                                    child: Container(
+                                                      color: Colors.transparent,
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              left: 12,
+                                                              right: 32),
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                      child: Text(
+                                                        openedMemoSpaces[i]
+                                                            .name,
+                                                        textAlign:
+                                                            TextAlign.left,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight: isFocused
+                                                              ? FontWeight.w700
+                                                              : FontWeight
+                                                                  .normal,
+                                                          color: Theme.of(
+                                                                  context)
+                                                              .colorScheme
+                                                              .inversePrimary,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              // X 버튼 (오른쪽 고정)
+                                              Positioned(
+                                                right: 0,
+                                                child: Opacity(
+                                                  opacity:
+                                                      (isFocused || hovered[i])
+                                                          ? 1.0
+                                                          : 0.0,
+                                                  child: closeMemoSpaceButton(
+                                                      openedMemoSpaces[i]),
                                                 ),
                                               ),
-                                            ),
-                                          // X 버튼 (오른쪽 고정)
-                                          Positioned(
-                                            right: 0,
-                                            child: Opacity(
-                                              opacity: (isFocused || hovered[i])
-                                                  ? 1.0
-                                                  : 0.0,
-                                              child: closeMemoSpaceButton(
-                                                  openedMemoSpaces[i]),
-                                            ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 );
                               },
                             );
@@ -672,66 +715,90 @@ class _MemoPageState extends State<MemoPage> {
       }
     }
 
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            HardwareKeyboard.instance.isMetaPressed &&
-            HardwareKeyboard.instance.isShiftPressed) {
-          if (event.logicalKey == LogicalKeyboardKey.braceLeft) {
-            // Cmd+Shift+[ : 왼쪽 탭으로 이동
-            if (openedMemoSpaces.isNotEmpty &&
-                focusedMemoSpace != null &&
-                focusedMemoSpace != openedMemoSpaces.first) {
-              setFocusedMemoSpace(openedMemoSpaces[
-                  openedMemoSpaces.indexOf(focusedMemoSpace!) - 1]);
-            }
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.braceRight) {
-            // Cmd+Shift+] : 오른쪽 탭으로 이동
-            if (openedMemoSpaces.isNotEmpty &&
-                focusedMemoSpace != null &&
-                focusedMemoSpace != openedMemoSpaces.last) {
-              setFocusedMemoSpace(openedMemoSpaces[
-                  openedMemoSpaces.indexOf(focusedMemoSpace!) + 1]);
-            }
-            return KeyEventResult.handled;
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        const threshold = 300.0;
+
+        if (velocity > threshold) {
+          // 오른쪽으로 스와이프 -> 왼쪽 탭으로
+          if (openedMemoSpaces.isNotEmpty &&
+              focusedMemoSpace != null &&
+              focusedMemoSpace != openedMemoSpaces.first) {
+            setFocusedMemoSpace(openedMemoSpaces[
+                openedMemoSpaces.indexOf(focusedMemoSpace!) - 1]);
+          }
+        } else if (velocity < -threshold) {
+          // 왼쪽으로 스와이프 -> 오른쪽 탭으로
+          if (openedMemoSpaces.isNotEmpty &&
+              focusedMemoSpace != null &&
+              focusedMemoSpace != openedMemoSpaces.last) {
+            setFocusedMemoSpace(openedMemoSpaces[
+                openedMemoSpaces.indexOf(focusedMemoSpace!) + 1]);
           }
         }
-        return KeyEventResult.ignored;
       },
-      child: Scaffold(
-        appBar: AppBar(
-          elevation: 0,
-          toolbarHeight: 40,
-          leading: Builder(
-            builder: (context) => Padding(
-              padding: const EdgeInsets.all(10.0),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: () => Scaffold.of(context).openDrawer(),
-                  child: const Center(
-                    child: Icon(Icons.menu, size: 18),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              HardwareKeyboard.instance.isMetaPressed &&
+              HardwareKeyboard.instance.isShiftPressed) {
+            if (event.logicalKey == LogicalKeyboardKey.braceLeft) {
+              // Cmd+Shift+[ : 왼쪽 탭으로 이동
+              if (openedMemoSpaces.isNotEmpty &&
+                  focusedMemoSpace != null &&
+                  focusedMemoSpace != openedMemoSpaces.first) {
+                setFocusedMemoSpace(openedMemoSpaces[
+                    openedMemoSpaces.indexOf(focusedMemoSpace!) - 1]);
+              }
+              return KeyEventResult.handled;
+            } else if (event.logicalKey == LogicalKeyboardKey.braceRight) {
+              // Cmd+Shift+] : 오른쪽 탭으로 이동
+              if (openedMemoSpaces.isNotEmpty &&
+                  focusedMemoSpace != null &&
+                  focusedMemoSpace != openedMemoSpaces.last) {
+                setFocusedMemoSpace(openedMemoSpaces[
+                    openedMemoSpaces.indexOf(focusedMemoSpace!) + 1]);
+              }
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            elevation: 0,
+            toolbarHeight: 40,
+            leading: Builder(
+              builder: (context) => Padding(
+                padding: const EdgeInsets.all(10.0),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => Scaffold.of(context).openDrawer(),
+                    child: const Center(
+                      child: Icon(Icons.menu, size: 18),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        drawer: MyDrawer(
-          memoSpaces: memoSpaces,
-          onTap: openMemoSpace,
-          onDelete: deleteMemoSpace,
-        ),
-        body: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            openedMemoSpaceTabs(openedMemoSpaces, focusedMemoSpace),
-            focusedMemoEditor(focusedMemoSpace),
-          ],
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          drawer: MyDrawer(
+            memoSpaces: memoSpaces,
+            onTap: openMemoSpace,
+            onDelete: deleteMemoSpace,
+          ),
+          body: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              openedMemoSpaceTabs(openedMemoSpaces, focusedMemoSpace),
+              focusedMemoEditor(focusedMemoSpace),
+            ],
+          ),
         ),
       ),
     );

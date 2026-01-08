@@ -3,18 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:memor/components/drawer_tile.dart';
 import 'package:memor/models/memo_space.dart';
+import 'package:memor/pages/settings_page.dart';
 import 'package:memor/theme/theme_provider.dart';
 
 class MyDrawer extends StatelessWidget {
   final List<MemoSpace> memoSpaces;
   final void Function(MemoSpace)? onTap;
   final void Function(MemoSpace)? onDelete;
+  final VoidCallback? onSettingsChanged;
 
   const MyDrawer(
       {super.key,
       required this.memoSpaces,
       required this.onTap,
-      required this.onDelete});
+      required this.onDelete,
+      this.onSettingsChanged});
 
   List<DrawerTile> renderMemoSpaces() {
     return memoSpaces
@@ -41,9 +44,16 @@ class MyDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 선택 안된 탭과 같은 색상으로 통일
+    final drawerColor = Color.lerp(
+      Theme.of(context).colorScheme.surface,
+      Theme.of(context).colorScheme.primary,
+      0.4,
+    )!;
+    
     return Drawer(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        surfaceTintColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: drawerColor,
+        surfaceTintColor: Colors.transparent,
         shape: const BeveledRectangleBorder(),
         child: Column(
           children: [
@@ -52,7 +62,7 @@ class MyDrawer extends StatelessWidget {
             ),
             ...renderMemoSpaces(),
             Divider(
-              color: Theme.of(context).colorScheme.secondary,
+              color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.1),
               thickness: 1,
               indent: 20,
               endIndent: 20,
@@ -68,6 +78,24 @@ class MyDrawer extends StatelessWidget {
                 },
               ),
               onTap: () {},
+            ),
+            DrawerTile(
+              title: "Settings",
+              trailing: Icon(
+                Icons.settings,
+                size: 20,
+                color: Theme.of(context).colorScheme.inversePrimary,
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                ).then((_) {
+                  // Settings 페이지에서 돌아온 후 completion service 다시 로드
+                  onSettingsChanged?.call();
+                });
+              },
             )
           ],
         ));

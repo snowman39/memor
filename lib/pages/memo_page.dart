@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:memor/components/autocomplete_text_field.dart';
 import 'package:memor/components/drawer.dart';
 import 'package:memor/models/memo_space.dart';
 import 'package:memor/models/memo_space_database.dart';
+import 'package:memor/services/completion_service.dart';
 import 'package:provider/provider.dart';
 
 class MemoPage extends StatefulWidget {
@@ -29,10 +31,28 @@ class _MemoPageState extends State<MemoPage> {
   int? _lastTappedTabId;
   DateTime? _lastTapTime;
 
+  // Autocomplete service
+  CompletionService? _completionService;
+
   @override
   void initState() {
     super.initState();
     readMemoSpaces();
+    _initCompletionService();
+  }
+
+  Future<void> _initCompletionService() async {
+    final settings = await CompletionSettings.load();
+    if (mounted) {
+      setState(() {
+        _completionService = CompletionService(settings);
+      });
+    }
+  }
+
+  /// Settings 페이지에서 돌아온 후 호출하여 completion service를 다시 로드
+  void reloadCompletionService() {
+    _initCompletionService();
   }
 
   @override
@@ -151,64 +171,65 @@ class _MemoPageState extends State<MemoPage> {
       );
     }
 
-    BoxDecoration leftTab = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
-    );
+    // 노션 스타일: 선택된 탭은 에디터와 같은 색, 선택 안된 탭은 살짝 다른 색
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    // 더 옅은 비활성 탭 색상 (surface와 primary 중간, surface에 가깝게)
+    final inactiveTabColor = Color.lerp(
+      Theme.of(context).colorScheme.surface,
+      Theme.of(context).colorScheme.primary,
+      0.4,
+    )!;
+    // hover 시 약간 더 진한 색상
+    final hoveredTabColor = Color.lerp(
+      Theme.of(context).colorScheme.surface,
+      Theme.of(context).colorScheme.primary,
+      0.65,
+    )!;
+    final borderColor = Theme.of(context).colorScheme.inversePrimary.withOpacity(0.08);
 
-    BoxDecoration leftFocusedTab = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-    );
+    // 탭 decoration을 함수로 생성
+    BoxDecoration getTabDecoration({
+      required bool isFirst,
+      required bool isFocused,
+      required bool isHovered,
+    }) {
+      Color bgColor;
+      if (isFocused) {
+        bgColor = surfaceColor;
+      } else if (isHovered) {
+        bgColor = hoveredTabColor;
+      } else {
+        bgColor = inactiveTabColor;
+      }
 
-    BoxDecoration middleTab = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        left: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
-    );
-
-    BoxDecoration middleFocusedTab = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        left: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
-    );
+      if (isFirst) {
+        return BoxDecoration(
+          color: bgColor,
+          border: isFocused ? null : Border(
+            bottom: BorderSide(color: borderColor, width: 1),
+          ),
+        );
+      } else {
+        return BoxDecoration(
+          color: bgColor,
+          border: Border(
+            left: BorderSide(color: borderColor, width: 1),
+            bottom: isFocused ? BorderSide.none : BorderSide(color: borderColor, width: 1),
+          ),
+        );
+      }
+    }
 
     BoxDecoration draggedTab = BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
+      color: surfaceColor,
+      borderRadius: BorderRadius.circular(4),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
         ),
-        bottom: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        left: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-        right: BorderSide(
-          color: Theme.of(context).colorScheme.inversePrimary,
-          width: 1,
-        ),
-      ),
+      ],
     );
 
     const double minTabWidth = 120;
@@ -221,24 +242,24 @@ class _MemoPageState extends State<MemoPage> {
           Expanded(
             child: Stack(
               children: [
-                // Top border
+                // Top border (연한 색상)
                 Positioned(
                   left: 0,
                   right: 0,
                   top: 0,
                   child: Container(
                     height: 1,
-                    color: Theme.of(context).colorScheme.inversePrimary,
+                    color: borderColor,
                   ),
                 ),
-                // Bottom border
+                // Bottom border (연한 색상)
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
                   child: Container(
                     height: 1,
-                    color: Theme.of(context).colorScheme.inversePrimary,
+                    color: borderColor,
                   ),
                 ),
                 // 탭 영역 (위 layer - bottom border를 덮을 수 있음)
@@ -367,17 +388,12 @@ class _MemoPageState extends State<MemoPage> {
                                         height: 32,
                                         width: tabWidth,
                                         decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface
-                                              .withOpacity(0.5),
+                                          color: inactiveTabColor.withOpacity(0.5),
                                           border: Border(
                                             left: i == 0
                                                 ? BorderSide.none
                                                 : BorderSide(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .inversePrimary,
+                                                    color: borderColor,
                                                     width: 1,
                                                   ),
                                           ),
@@ -397,15 +413,11 @@ class _MemoPageState extends State<MemoPage> {
                                         child: Container(
                                           width: tabWidth,
                                           height: 31,
-                                          decoration: (i == 0)
-                                              ? (openedMemoSpaces.length == 1)
-                                                  ? middleFocusedTab
-                                                  : (isFocused)
-                                                      ? leftFocusedTab
-                                                      : leftTab
-                                              : (isFocused)
-                                                  ? middleFocusedTab
-                                                  : middleTab,
+                                          decoration: getTabDecoration(
+                                            isFirst: i == 0,
+                                            isFocused: isFocused,
+                                            isHovered: hovered[i],
+                                          ),
                                           child: Stack(
                                             alignment: Alignment.center,
                                             children: [
@@ -415,7 +427,7 @@ class _MemoPageState extends State<MemoPage> {
                                                 Padding(
                                                   padding:
                                                       const EdgeInsets.only(
-                                                          left: 12, right: 32),
+                                                          left: 17, right: 32),
                                                   child: Focus(
                                                     onFocusChange: (hasFocus) {
                                                       if (!hasFocus) {
@@ -511,7 +523,7 @@ class _MemoPageState extends State<MemoPage> {
                                                       color: Colors.transparent,
                                                       padding:
                                                           const EdgeInsets.only(
-                                                              left: 12,
+                                                              left: 17,
                                                               right: 32),
                                                       alignment:
                                                           Alignment.centerLeft,
@@ -592,22 +604,28 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   Widget createMemoSpaceButton() {
+    final borderColor = Theme.of(context).colorScheme.inversePrimary.withOpacity(0.08);
+    final inactiveColor = Color.lerp(
+      Theme.of(context).colorScheme.surface,
+      Theme.of(context).colorScheme.primary,
+      0.4,
+    )!;
     return Container(
       height: 32,
       width: 34,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: inactiveColor,
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).colorScheme.inversePrimary,
+            color: borderColor,
             width: 1,
           ),
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.inversePrimary,
+            color: borderColor,
             width: 1,
           ),
           left: BorderSide(
-            color: Theme.of(context).colorScheme.inversePrimary,
+            color: borderColor,
             width: 1,
           ),
         ),
@@ -617,8 +635,12 @@ class _MemoPageState extends State<MemoPage> {
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
           onTap: createMemoSpace,
-          child: const Center(
-            child: Icon(Icons.add, size: 16),
+          child: Center(
+            child: Icon(
+              Icons.add, 
+              size: 16,
+              color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.5),
+            ),
           ),
         ),
       ),
@@ -660,12 +682,13 @@ class _MemoPageState extends State<MemoPage> {
       flex: 10,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: TextField(
+        child: AutocompleteTextField(
           style: TextStyle(
             color: Theme.of(context).colorScheme.inversePrimary,
             fontSize: 14,
           ),
           controller: controller,
+          completionService: _completionService,
           onChanged: (text) {
             focusedMemoSpace.memo = text;
             if (timer?.isActive ?? false) timer?.cancel();
@@ -762,15 +785,19 @@ class _MemoPageState extends State<MemoPage> {
             elevation: 0,
             toolbarHeight: 40,
             leading: Builder(
-              builder: (context) => Padding(
-                padding: const EdgeInsets.all(10.0),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: () => Scaffold.of(context).openDrawer(),
-                    child: const Center(
-                      child: Icon(Icons.menu, size: 18),
+              builder: (context) => GestureDetector(
+                onTap: () => Scaffold.of(context).openDrawer(),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Opacity(
+                      opacity: 0.8,
+                      child: Image.asset(
+                        'assets/icon/app_icon.png',
+                        width: 24,
+                        height: 24,
+                      ),
                     ),
                   ),
                 ),
@@ -782,6 +809,7 @@ class _MemoPageState extends State<MemoPage> {
             memoSpaces: memoSpaces,
             onTap: openMemoSpace,
             onDelete: deleteMemoSpace,
+            onSettingsChanged: reloadCompletionService,
           ),
           body: Column(
             mainAxisAlignment: MainAxisAlignment.start,

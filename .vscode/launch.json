@@ -2,25 +2,25 @@
     "version": "0.2.0",
     "configurations": [
         {
-        "name": "memor (debug)",
-        "request": "launch",
-        "type": "dart",
-        "program": "lib/main.dart",
-        "flutterMode": "debug"
+            "name": "Memor (debug)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "debug"
         },
         {
-        "name": "memor (profile)",
-        "request": "launch",
-        "type": "dart",
-        "program": "lib/main.dart",
-        "flutterMode": "profile"
+            "name": "Memor (profile)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "profile"
         },
         {
-        "name": "memor (release)",
-        "request": "launch",
-        "type": "dart",
-        "program": "lib/main.dart",
-        "flutterMode": "release"
+            "name": "Memor (release)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "release"
         }
     ]
 }

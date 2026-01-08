@@ -231,7 +231,7 @@ class _MemoPageState extends State<MemoPage> {
                     color: Theme.of(context).colorScheme.inversePrimary,
                   ),
                 ),
-                // Bottom border (맨 아래 layer)
+                // Bottom border
                 Positioned(
                   left: 0,
                   right: 0,
@@ -269,7 +269,9 @@ class _MemoPageState extends State<MemoPage> {
                             bool isFocused =
                                 openedMemoSpaces.indexOf(focusedMemoSpace!) ==
                                     i;
-                            return DragTarget<int>(
+                            return Align(
+                              alignment: Alignment.topLeft,
+                              child: DragTarget<int>(
                               onAcceptWithDetails: (from) {
                                 dragMemoSpace(from.data, i);
                               },
@@ -370,18 +372,6 @@ class _MemoPageState extends State<MemoPage> {
                                               .surface
                                               .withOpacity(0.5),
                                           border: Border(
-                                            top: BorderSide(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .inversePrimary,
-                                              width: 1,
-                                            ),
-                                            bottom: BorderSide(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .inversePrimary,
-                                              width: 1,
-                                            ),
                                             left: i == 0
                                                 ? BorderSide.none
                                                 : BorderSide(
@@ -406,7 +396,7 @@ class _MemoPageState extends State<MemoPage> {
                                         },
                                         child: Container(
                                           width: tabWidth,
-                                          height: isFocused ? 31 : 30,
+                                          height: 31,
                                           decoration: (i == 0)
                                               ? (openedMemoSpaces.length == 1)
                                                   ? middleFocusedTab
@@ -567,6 +557,7 @@ class _MemoPageState extends State<MemoPage> {
                                   ],
                                 );
                               },
+                              ),
                             );
                           },
                         ),

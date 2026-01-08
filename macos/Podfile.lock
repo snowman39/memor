@@ -5,17 +5,11 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - rich_clipboard_macos (0.0.1):
-    - FlutterMacOS
-  - url_launcher_macos (0.0.1):
-    - FlutterMacOS
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
   - isar_flutter_libs (from `Flutter/ephemeral/.symlinks/plugins/isar_flutter_libs/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
-  - rich_clipboard_macos (from `Flutter/ephemeral/.symlinks/plugins/rich_clipboard_macos/macos`)
-  - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
@@ -24,18 +18,12 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/isar_flutter_libs/macos
   path_provider_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
-  rich_clipboard_macos:
-    :path: Flutter/ephemeral/.symlinks/plugins/rich_clipboard_macos/macos
-  url_launcher_macos:
-    :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
 
 SPEC CHECKSUMS:
   FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
-  isar_flutter_libs: 43385c99864c168fadba7c9adeddc5d38838ca6a
-  path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
-  rich_clipboard_macos: 43364b66b9dc69d203eb8dd6d758e2d12e02723c
-  url_launcher_macos: 5f437abeda8c85500ceb03f5c1938a8c5a705399
+  isar_flutter_libs: a65381780401f81ad6bf3f2e7cd0de5698fb98c4
+  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
 
-PODFILE CHECKSUM: 236401fc2c932af29a9fcf0e97baeeb2d750d367
+PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.16.2

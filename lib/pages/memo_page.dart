@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:memor/components/autocomplete_text_field.dart';
@@ -23,6 +24,8 @@ class _MemoPageState extends State<MemoPage> {
   MemoSpace? focusedMemoSpace;
   Map<int, TextSelection> textEditorPositions = {};
   final Map<int, TextEditingController> _memoControllers = {};
+  final Map<int, FocusNode> _memoFocusNodes = {};
+  final Map<int, ScrollController> _memoScrollControllers = {};
   Timer? timer;
   int? editingTabId;
   final ScrollController _tabScrollController = ScrollController();
@@ -33,6 +36,13 @@ class _MemoPageState extends State<MemoPage> {
 
   // Autocomplete service
   CompletionService? _completionService;
+
+  // 검색 기능
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<int> _searchMatches = []; // 검색 결과 위치들
+  int _currentMatchIndex = -1;
 
   @override
   void initState() {
@@ -55,11 +65,125 @@ class _MemoPageState extends State<MemoPage> {
     _initCompletionService();
   }
 
+  // 검색 기능 메서드들
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (_isSearching) {
+        _searchFocusNode.requestFocus();
+      } else {
+        _searchController.clear();
+        _searchMatches.clear();
+        _currentMatchIndex = -1;
+      }
+    });
+  }
+
+  void _performSearch(String query) {
+    if (focusedMemoSpace == null || query.isEmpty) {
+      setState(() {
+        _searchMatches.clear();
+        _currentMatchIndex = -1;
+      });
+      return;
+    }
+
+    final text = focusedMemoSpace!.memo.toLowerCase();
+    final searchQuery = query.toLowerCase();
+    final matches = <int>[];
+
+    int index = 0;
+    while (true) {
+      index = text.indexOf(searchQuery, index);
+      if (index == -1) break;
+      matches.add(index);
+      index += 1;
+    }
+
+    setState(() {
+      _searchMatches = matches;
+      _currentMatchIndex = matches.isNotEmpty ? 0 : -1;
+    });
+    // 검색어 입력 중에는 focus 이동 안 함 - Enter나 버튼 클릭 시에만 이동
+  }
+
+  void _nextMatch() {
+    if (_searchMatches.isEmpty) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex + 1) % _searchMatches.length;
+    });
+    _highlightMatch();
+  }
+
+  void _previousMatch() {
+    if (_searchMatches.isEmpty) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex - 1 + _searchMatches.length) % _searchMatches.length;
+    });
+    _highlightMatch();
+  }
+
+  void _highlightMatch() {
+    if (_currentMatchIndex < 0 || focusedMemoSpace == null) return;
+    
+    final controller = _memoControllers[focusedMemoSpace!.id];
+    final focusNode = _memoFocusNodes[focusedMemoSpace!.id];
+    final scrollController = _memoScrollControllers[focusedMemoSpace!.id];
+    if (controller == null) return;
+
+    final matchStart = _searchMatches[_currentMatchIndex];
+    final matchEnd = matchStart + _searchController.text.length;
+
+    // 에디터에 focus를 줘야 selection이 보임
+    if (focusNode != null) {
+      focusNode.requestFocus();
+    }
+
+    // selection 설정
+    Future.delayed(const Duration(milliseconds: 30), () {
+      if (mounted) {
+        controller.selection = TextSelection(
+          baseOffset: matchStart,
+          extentOffset: matchEnd,
+        );
+      }
+    });
+    
+    // 스크롤 위치 계산 및 이동
+    if (scrollController != null && scrollController.hasClients) {
+      final text = controller.text.substring(0, matchStart);
+      final lineCount = '\n'.allMatches(text).length;
+      const lineHeight = 20.0; // 대략적인 줄 높이
+      final targetScroll = lineCount * lineHeight;
+      
+      final maxScroll = scrollController.position.maxScrollExtent;
+      final viewportHeight = scrollController.position.viewportDimension;
+      
+      // 현재 뷰포트에 보이지 않으면 스크롤
+      final currentScroll = scrollController.offset;
+      if (targetScroll < currentScroll || targetScroll > currentScroll + viewportHeight - 50) {
+        scrollController.animateTo(
+          (targetScroll - viewportHeight / 3).clamp(0.0, maxScroll),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _tabScrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     for (var controller in _memoControllers.values) {
       controller.dispose();
+    }
+    for (var focusNode in _memoFocusNodes.values) {
+      focusNode.dispose();
+    }
+    for (var scrollController in _memoScrollControllers.values) {
+      scrollController.dispose();
     }
     super.dispose();
   }
@@ -647,6 +771,102 @@ class _MemoPageState extends State<MemoPage> {
     );
   }
 
+  Widget _buildSearchBar() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final borderColor = colorScheme.inversePrimary.withOpacity(0.08);
+    
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(color: borderColor, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          // 검색 아이콘
+          Icon(
+            Icons.search,
+            size: 16,
+            color: colorScheme.inversePrimary.withOpacity(0.5),
+          ),
+          const SizedBox(width: 8),
+          // 검색 입력
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.inversePrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search...',
+                hintStyle: TextStyle(
+                  color: colorScheme.inversePrimary.withOpacity(0.4),
+                  fontSize: 13,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: _performSearch,
+              onSubmitted: (_) {
+                if (HardwareKeyboard.instance.isShiftPressed) {
+                  _previousMatch();
+                } else {
+                  _nextMatch();
+                }
+              },
+            ),
+          ),
+          // 결과 카운트
+          if (_searchMatches.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '${_currentMatchIndex + 1}/${_searchMatches.length}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.inversePrimary.withOpacity(0.5),
+                ),
+              ),
+            ),
+          // 이전/다음 버튼
+          if (_searchMatches.isNotEmpty) ...[
+            _buildSearchNavButton(Icons.keyboard_arrow_up, _previousMatch),
+            _buildSearchNavButton(Icons.keyboard_arrow_down, _nextMatch),
+          ],
+          // 닫기 버튼
+          _buildSearchNavButton(Icons.close, _toggleSearch),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchNavButton(IconData icon, VoidCallback onTap) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: onTap,
+          child: Center(
+            child: Icon(
+              icon,
+              size: 16,
+              color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Expanded focusedMemoEditor(MemoSpace? focusedMemoSpace) {
     if (focusedMemoSpace == null) {
       return const Expanded(
@@ -669,6 +889,24 @@ class _MemoPageState extends State<MemoPage> {
       _memoControllers[focusedMemoSpace.id] = controller;
     }
 
+    // 캐싱된 FocusNode 사용 또는 새로 생성
+    FocusNode focusNode;
+    if (_memoFocusNodes.containsKey(focusedMemoSpace.id)) {
+      focusNode = _memoFocusNodes[focusedMemoSpace.id]!;
+    } else {
+      focusNode = FocusNode();
+      _memoFocusNodes[focusedMemoSpace.id] = focusNode;
+    }
+
+    // 캐싱된 ScrollController 사용 또는 새로 생성
+    ScrollController scrollController;
+    if (_memoScrollControllers.containsKey(focusedMemoSpace.id)) {
+      scrollController = _memoScrollControllers[focusedMemoSpace.id]!;
+    } else {
+      scrollController = ScrollController();
+      _memoScrollControllers[focusedMemoSpace.id] = scrollController;
+    }
+
     TextSelection? savedPosition = textEditorPositions[focusedMemoSpace.id];
     if (savedPosition != null) {
       int maxOffset = focusedMemoSpace.memo.length;
@@ -686,8 +924,12 @@ class _MemoPageState extends State<MemoPage> {
           style: TextStyle(
             color: Theme.of(context).colorScheme.inversePrimary,
             fontSize: 14,
+            height: 1.5, // 줄 높이
+            leadingDistribution: TextLeadingDistribution.even,
           ),
           controller: controller,
+          focusNode: focusNode,
+          scrollController: scrollController,
           completionService: _completionService,
           onChanged: (text) {
             focusedMemoSpace.memo = text;
@@ -755,28 +997,56 @@ class _MemoPageState extends State<MemoPage> {
       child: Focus(
         autofocus: true,
         onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              HardwareKeyboard.instance.isMetaPressed &&
-              HardwareKeyboard.instance.isShiftPressed) {
-            if (event.logicalKey == LogicalKeyboardKey.braceLeft) {
-              // Cmd+Shift+[ : 왼쪽 탭으로 이동
-              if (openedMemoSpaces.isNotEmpty &&
-                  focusedMemoSpace != null &&
-                  focusedMemoSpace != openedMemoSpaces.first) {
-                setFocusedMemoSpace(openedMemoSpaces[
-                    openedMemoSpaces.indexOf(focusedMemoSpace!) - 1]);
+          try {
+            if (event is KeyDownEvent) {
+              // Cmd+F : 검색
+              if (HardwareKeyboard.instance.isMetaPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyF) {
+                _toggleSearch();
+                return KeyEventResult.handled;
               }
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.braceRight) {
-              // Cmd+Shift+] : 오른쪽 탭으로 이동
-              if (openedMemoSpaces.isNotEmpty &&
-                  focusedMemoSpace != null &&
-                  focusedMemoSpace != openedMemoSpaces.last) {
-                setFocusedMemoSpace(openedMemoSpaces[
-                    openedMemoSpaces.indexOf(focusedMemoSpace!) + 1]);
+              // Escape : 검색 닫기
+              if (event.logicalKey == LogicalKeyboardKey.escape && _isSearching) {
+                _toggleSearch();
+                return KeyEventResult.handled;
               }
-              return KeyEventResult.handled;
+              // 검색 모드에서 Enter : 다음/이전 검색 결과로 이동
+              if (_isSearching && _searchMatches.isNotEmpty &&
+                  event.logicalKey == LogicalKeyboardKey.enter) {
+                if (HardwareKeyboard.instance.isShiftPressed) {
+                  _previousMatch();
+                } else {
+                  _nextMatch();
+                }
+                return KeyEventResult.handled;
+              }
+              // Cmd+Shift 조합
+              if (HardwareKeyboard.instance.isMetaPressed &&
+                  HardwareKeyboard.instance.isShiftPressed) {
+                if (event.logicalKey == LogicalKeyboardKey.braceLeft) {
+                  // Cmd+Shift+[ : 왼쪽 탭으로 이동
+                  if (openedMemoSpaces.isNotEmpty &&
+                      focusedMemoSpace != null &&
+                      focusedMemoSpace != openedMemoSpaces.first) {
+                    setFocusedMemoSpace(openedMemoSpaces[
+                        openedMemoSpaces.indexOf(focusedMemoSpace!) - 1]);
+                  }
+                  return KeyEventResult.handled;
+                } else if (event.logicalKey == LogicalKeyboardKey.braceRight) {
+                  // Cmd+Shift+] : 오른쪽 탭으로 이동
+                  if (openedMemoSpaces.isNotEmpty &&
+                      focusedMemoSpace != null &&
+                      focusedMemoSpace != openedMemoSpaces.last) {
+                    setFocusedMemoSpace(openedMemoSpaces[
+                        openedMemoSpaces.indexOf(focusedMemoSpace!) + 1]);
+                  }
+                  return KeyEventResult.handled;
+                }
+              }
             }
+          } catch (e) {
+            // 키보드 상태 동기화 에러 무시 (Flutter 버그)
+            debugPrint('Keyboard event error (ignored): $e');
           }
           return KeyEventResult.ignored;
         },
@@ -815,6 +1085,8 @@ class _MemoPageState extends State<MemoPage> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               openedMemoSpaceTabs(openedMemoSpaces, focusedMemoSpace),
+              // 검색 바
+              if (_isSearching) _buildSearchBar(),
               focusedMemoEditor(focusedMemoSpace),
             ],
           ),

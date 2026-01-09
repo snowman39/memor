@@ -10,10 +10,10 @@ ThemeData lightMode = ThemeData(
     inversePrimary: const Color(0xFF454545),
   ),
   fontFamily: 'SFProText',
-  textSelectionTheme: const TextSelectionThemeData(
-    cursorColor: Colors.lightGreen,
-    selectionColor: Colors.lightGreen,
-    selectionHandleColor: Colors.lightGreen,
+  textSelectionTheme: TextSelectionThemeData(
+    cursorColor: const Color(0xFFD0EAC8), // 더 순수한 연두색
+    selectionColor: const Color(0xFFD0EAC8).withOpacity(1.0),
+    selectionHandleColor: const Color(0xFFD0EAC8),
   ),
 );
 
@@ -27,9 +27,9 @@ ThemeData darkMode = ThemeData(
     inversePrimary: Colors.grey.shade300,
   ),
   fontFamily: 'SFProText',
-  textSelectionTheme: const TextSelectionThemeData(
-    cursorColor: Colors.lightGreen,
-    selectionColor: Colors.lightGreen,
-    selectionHandleColor: Colors.lightGreen,
+  textSelectionTheme: TextSelectionThemeData(
+    cursorColor: const Color(0xFFD0EAC8), // 더 순수한 연두색
+    selectionColor: const Color(0xFFD0EAC8).withOpacity(1.0),
+    selectionHandleColor: const Color(0xFFD0EAC8),
   ),
 );

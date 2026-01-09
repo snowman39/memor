@@ -1,20 +1,23 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:memor/services/completion_service.dart';
 
 enum AutocompleteStatus {
-  idle,       // 대기 중
-  disabled,   // 비활성화됨 (API 설정 안됨)
-  waiting,    // debounce 대기 중
-  loading,    // API 요청 중
-  ready,      // 제안 준비됨
-  error,      // 오류 발생
+  idle, // 대기 중
+  disabled, // 비활성화됨 (API 설정 안됨)
+  waiting, // debounce 대기 중
+  loading, // API 요청 중
+  ready, // 제안 준비됨
+  error, // 오류 발생
 }
 
 class AutocompleteTextField extends StatefulWidget {
   final TextEditingController controller;
+  final FocusNode? focusNode;
+  final ScrollController? scrollController;
   final CompletionService? completionService;
   final ValueChanged<String>? onChanged;
   final TextStyle? style;
@@ -27,6 +30,8 @@ class AutocompleteTextField extends StatefulWidget {
   const AutocompleteTextField({
     super.key,
     required this.controller,
+    this.focusNode,
+    this.scrollController,
     this.completionService,
     this.onChanged,
     this.style,
@@ -46,7 +51,10 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
   Timer? _debounceTimer;
   AutocompleteStatus _status = AutocompleteStatus.idle;
   String? _errorMessage;
-  final FocusNode _focusNode = FocusNode();
+  FocusNode? _internalFocusNode;
+
+  FocusNode get _focusNode =>
+      widget.focusNode ?? (_internalFocusNode ??= FocusNode());
 
   @override
   void initState() {
@@ -87,7 +95,7 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
   void dispose() {
     widget.controller.removeListener(_onTextChanged);
     _debounceTimer?.cancel();
-    _focusNode.dispose();
+    _internalFocusNode?.dispose(); // 내부에서 생성한 FocusNode만 dispose
     super.dispose();
   }
 
@@ -105,9 +113,10 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
 
     // 이전 타이머 취소 (연속 타이핑 시 요청 안함)
     _debounceTimer?.cancel();
-    
+
     // 너무 자주 상태 변경 안하도록 - 타이핑 끝나고 잠시 후에만 waiting 표시
-    if (_status != AutocompleteStatus.waiting && _status != AutocompleteStatus.loading) {
+    if (_status != AutocompleteStatus.waiting &&
+        _status != AutocompleteStatus.loading) {
       // 바로 waiting으로 안 바꾸고, 짧은 딜레이 후에 바꿈
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted && _debounceTimer?.isActive == true) {
@@ -125,7 +134,7 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
 
   Future<void> _requestCompletion() async {
     debugPrint('📝 [Editor] _requestCompletion called');
-    
+
     if (widget.completionService == null) {
       debugPrint('📝 [Editor] ❌ completionService is null');
       return;
@@ -148,7 +157,7 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
 
     final text = widget.controller.text;
     final cursorPosition = widget.controller.selection.baseOffset;
-    
+
     // 커서 위치가 유효하지 않으면 무시
     if (cursorPosition < 0 || cursorPosition > text.length) {
       debugPrint('📝 [Editor] ❌ invalid cursor position: $cursorPosition');
@@ -158,13 +167,16 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
     // 커서 앞/뒤 텍스트 분리
     final textBefore = text.substring(0, cursorPosition);
     final textAfter = text.substring(cursorPosition);
-    
-    debugPrint('📝 [Editor] text length: ${text.length}, cursor: $cursorPosition');
-    debugPrint('📝 [Editor] before: ${textBefore.length} chars, after: ${textAfter.length} chars');
-    
+
+    debugPrint(
+        '📝 [Editor] text length: ${text.length}, cursor: $cursorPosition');
+    debugPrint(
+        '📝 [Editor] before: ${textBefore.length} chars, after: ${textAfter.length} chars');
+
     // 커서 앞 텍스트가 너무 짧으면 제안하지 않음
     if (textBefore.trim().length < 3) {
-      debugPrint('📝 [Editor] ❌ text before cursor too short (${textBefore.trim().length} < 3)');
+      debugPrint(
+          '📝 [Editor] ❌ text before cursor too short (${textBefore.trim().length} < 3)');
       setState(() {
         _status = AutocompleteStatus.idle;
       });
@@ -186,22 +198,25 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
         textBefore,
         textAfter: textAfter,
       );
-      
+
       // 텍스트나 커서 위치가 변경되었으면 제안 무시
-      if (widget.controller.text != savedText || 
+      if (widget.controller.text != savedText ||
           widget.controller.selection.baseOffset != savedCursorPosition) {
         debugPrint('📝 [Editor] Text or cursor changed, ignoring suggestion');
         return;
       }
-      
+
       debugPrint('📝 [Editor] Suggestion received: "$suggestion"');
-      
+
       if (mounted) {
         setState(() {
           _suggestion = suggestion;
-          _status = suggestion != null ? AutocompleteStatus.ready : AutocompleteStatus.idle;
+          _status = suggestion != null
+              ? AutocompleteStatus.ready
+              : AutocompleteStatus.idle;
         });
-        debugPrint('📝 [Editor] Status updated to: $_status, suggestion set: ${_suggestion != null}');
+        debugPrint(
+            '📝 [Editor] Status updated to: $_status, suggestion set: ${_suggestion != null}');
       }
     } catch (e) {
       debugPrint('📝 [Editor] Error: $e');
@@ -219,16 +234,17 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
 
     final text = widget.controller.text;
     final cursorPosition = widget.controller.selection.baseOffset;
-    
+
     // 커서 위치에 제안 텍스트 삽입
     final textBefore = text.substring(0, cursorPosition);
     final textAfter = text.substring(cursorPosition);
     final newText = textBefore + _suggestion! + textAfter;
     final newCursorPosition = cursorPosition + _suggestion!.length;
-    
+
     widget.controller.text = newText;
-    widget.controller.selection = TextSelection.collapsed(offset: newCursorPosition);
-    
+    widget.controller.selection =
+        TextSelection.collapsed(offset: newCursorPosition);
+
     widget.onChanged?.call(newText);
 
     setState(() {
@@ -253,25 +269,26 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
         _acceptSuggestion();
         return KeyEventResult.handled;
       }
-      
+
       // Escape 키로 제안 취소
-      if (event.logicalKey == LogicalKeyboardKey.escape && _suggestion != null) {
+      if (event.logicalKey == LogicalKeyboardKey.escape &&
+          _suggestion != null) {
         _dismissSuggestion();
         return KeyEventResult.handled;
       }
     }
-    
+
     return KeyEventResult.ignored;
   }
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = widget.style ?? 
+    final textStyle = widget.style ??
         TextStyle(
           color: Theme.of(context).colorScheme.inversePrimary,
           fontSize: 14,
         );
-    
+
     final ghostTextStyle = textStyle.copyWith(
       color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.5),
       fontStyle: FontStyle.italic,
@@ -292,18 +309,27 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
                       child: _buildGhostTextOverlay(textStyle, ghostTextStyle),
                     ),
                   ),
-                
+
                 // 실제 TextField
                 TextField(
                   controller: widget.controller,
                   focusNode: _focusNode,
+                  scrollController: widget.scrollController,
                   style: textStyle,
-                  decoration: widget.decoration ?? const InputDecoration(border: InputBorder.none),
+                  strutStyle: StrutStyle(
+                    fontSize: textStyle.fontSize ?? 14,
+                    height: textStyle.height ?? 1.5,
+                    forceStrutHeight: true, // 모든 문자에 동일한 높이 강제
+                  ),
+                  selectionHeightStyle:
+                      ui.BoxHeightStyle.strut, // strut 기준으로 selection 높이
+                  decoration: widget.decoration ??
+                      const InputDecoration(border: InputBorder.none),
                   autofocus: widget.autofocus,
                   maxLines: widget.maxLines,
                   onChanged: widget.onChanged,
                 ),
-                
+
                 // 로딩 인디케이터 (개선됨)
                 if (_status == AutocompleteStatus.loading)
                   Positioned(
@@ -315,10 +341,9 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
             ),
           ),
         ),
-        
+
         // 상태 표시기
-        if (widget.showStatusIndicator)
-          _buildStatusIndicator(context),
+        if (widget.showStatusIndicator) _buildStatusIndicator(context),
       ],
     );
   }
@@ -351,7 +376,8 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
             'AI',
             style: TextStyle(
               fontSize: 10,
-              color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.6),
+              color:
+                  Theme.of(context).colorScheme.inversePrimary.withOpacity(0.6),
             ),
           ),
         ],
@@ -361,11 +387,11 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
 
   Widget _buildStatusIndicator(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     IconData icon;
     Color color;
     String text;
-    
+
     switch (_status) {
       case AutocompleteStatus.idle:
         icon = Icons.auto_awesome_outlined;
@@ -390,7 +416,8 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
       case AutocompleteStatus.ready:
         icon = Icons.lightbulb;
         color = Colors.amber;
-        text = 'Tab to accept: "${_suggestion != null && _suggestion!.length > 30 ? '${_suggestion!.substring(0, 30)}...' : _suggestion ?? ''}"';
+        text =
+            'Tab to accept: "${_suggestion != null && _suggestion!.length > 30 ? '${_suggestion!.substring(0, 30)}...' : _suggestion ?? ''}"';
         break;
       case AutocompleteStatus.error:
         icon = Icons.error_outline;
@@ -484,7 +511,7 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
 
   Widget _buildGhostTextOverlay(TextStyle textStyle, TextStyle ghostTextStyle) {
     final text = widget.controller.text;
-    
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return CustomPaint(
@@ -548,19 +575,23 @@ class _GhostTextPainter extends CustomPainter {
       textDirection: textDirection,
       maxLines: null,
     );
-    
+
     // 남은 공간에 맞게 레이아웃
-    final remainingWidth = size.width - lastPosition.dx - resolvedPadding.horizontal;
-    ghostPainter.layout(maxWidth: remainingWidth > 50 ? remainingWidth : size.width);
+    final remainingWidth =
+        size.width - lastPosition.dx - resolvedPadding.horizontal;
+    ghostPainter.layout(
+        maxWidth: remainingWidth > 50 ? remainingWidth : size.width);
 
     // Ghost text 위치 결정
     double offsetX = lastPosition.dx + resolvedPadding.left;
     double offsetY = lastPosition.dy + resolvedPadding.top;
-    
+
     // 만약 같은 줄에 공간이 부족하면 다음 줄로
     if (remainingWidth < 50) {
       offsetX = resolvedPadding.left;
-      offsetY = lastPosition.dy + textPainter.preferredLineHeight + resolvedPadding.top;
+      offsetY = lastPosition.dy +
+          textPainter.preferredLineHeight +
+          resolvedPadding.top;
     }
 
     ghostPainter.paint(canvas, Offset(offsetX, offsetY));

@@ -295,55 +295,59 @@ class _AutocompleteTextFieldState extends State<AutocompleteTextField> {
       backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
     );
 
+    final textFieldWidget = Focus(
+      onKeyEvent: _handleKeyEvent,
+      child: Stack(
+        children: [
+          // Ghost text 레이어 (제안 표시)
+          if (_suggestion != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _buildGhostTextOverlay(textStyle, ghostTextStyle),
+              ),
+            ),
+
+          // 실제 TextField
+          TextField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            scrollController: widget.scrollController,
+            style: textStyle,
+            strutStyle: StrutStyle(
+              fontSize: textStyle.fontSize ?? 14,
+              height: textStyle.height ?? 1.5,
+              forceStrutHeight: true, // 모든 문자에 동일한 높이 강제
+            ),
+            selectionHeightStyle:
+                ui.BoxHeightStyle.strut, // strut 기준으로 selection 높이
+            decoration: widget.decoration ??
+                const InputDecoration(border: InputBorder.none),
+            autofocus: widget.autofocus,
+            maxLines: widget.maxLines,
+            onChanged: widget.onChanged,
+          ),
+
+          // 로딩 인디케이터 (개선됨)
+          if (_status == AutocompleteStatus.loading)
+            Positioned(
+              right: 8,
+              top: 8,
+              child: _buildLoadingIndicator(context),
+            ),
+        ],
+      ),
+    );
+
+    // If no status indicator, just return the text field (works in ListView)
+    if (!widget.showStatusIndicator) {
+      return textFieldWidget;
+    }
+
+    // With status indicator, use Column+Expanded (requires parent with bounded height)
     return Column(
       children: [
-        Expanded(
-          child: Focus(
-            onKeyEvent: _handleKeyEvent,
-            child: Stack(
-              children: [
-                // Ghost text 레이어 (제안 표시)
-                if (_suggestion != null)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: _buildGhostTextOverlay(textStyle, ghostTextStyle),
-                    ),
-                  ),
-
-                // 실제 TextField
-                TextField(
-                  controller: widget.controller,
-                  focusNode: _focusNode,
-                  scrollController: widget.scrollController,
-                  style: textStyle,
-                  strutStyle: StrutStyle(
-                    fontSize: textStyle.fontSize ?? 14,
-                    height: textStyle.height ?? 1.5,
-                    forceStrutHeight: true, // 모든 문자에 동일한 높이 강제
-                  ),
-                  selectionHeightStyle:
-                      ui.BoxHeightStyle.strut, // strut 기준으로 selection 높이
-                  decoration: widget.decoration ??
-                      const InputDecoration(border: InputBorder.none),
-                  autofocus: widget.autofocus,
-                  maxLines: widget.maxLines,
-                  onChanged: widget.onChanged,
-                ),
-
-                // 로딩 인디케이터 (개선됨)
-                if (_status == AutocompleteStatus.loading)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: _buildLoadingIndicator(context),
-                  ),
-              ],
-            ),
-          ),
-        ),
-
-        // 상태 표시기
-        if (widget.showStatusIndicator) _buildStatusIndicator(context),
+        Expanded(child: textFieldWidget),
+        _buildStatusIndicator(context),
       ],
     );
   }

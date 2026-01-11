@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:memor/components/autocomplete_text_field.dart';
 import 'package:memor/components/drawer.dart';
+import 'package:memor/components/memo_editor.dart';
+import 'package:memor/models/memo.dart';
+import 'package:memor/models/memo_annotation.dart';
 import 'package:memor/models/memo_space.dart';
 import 'package:memor/models/memo_space_database.dart';
 import 'package:memor/services/completion_service.dart';
@@ -22,11 +24,12 @@ class _MemoPageState extends State<MemoPage> {
   List<bool> hovered = [];
 
   MemoSpace? focusedMemoSpace;
-  Map<int, TextSelection> textEditorPositions = {};
-  final Map<int, TextEditingController> _memoControllers = {};
-  final Map<int, FocusNode> _memoFocusNodes = {};
-  final Map<int, ScrollController> _memoScrollControllers = {};
-  Timer? timer;
+
+  // Memos for the currently focused MemoSpace
+  List<Memo> _currentMemos = [];
+  Map<int, List<MemoAnnotation>> _annotations = {}; // memoId -> annotations
+  bool _memosLoading = false;
+
   int? editingTabId;
   final ScrollController _tabScrollController = ScrollController();
 
@@ -41,13 +44,16 @@ class _MemoPageState extends State<MemoPage> {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  List<int> _searchMatches = []; // 검색 결과 위치들
+  List<SearchMatch> _searchMatches = [];
   int _currentMatchIndex = -1;
 
   @override
   void initState() {
     super.initState();
-    readMemoSpaces();
+    // Delay readMemoSpaces to avoid calling notifyListeners during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      readMemoSpaces();
+    });
     _initCompletionService();
   }
 
@@ -65,6 +71,39 @@ class _MemoPageState extends State<MemoPage> {
     _initCompletionService();
   }
 
+  // Load memos for the currently focused MemoSpace
+  Future<void> _loadMemosForFocusedSpace() async {
+    if (focusedMemoSpace == null) {
+      setState(() {
+        _currentMemos = [];
+        _annotations = {};
+      });
+      return;
+    }
+
+    setState(() {
+      _memosLoading = true;
+    });
+
+    final db = context.read<MemoSpaceDatabase>();
+    final memos = await db.getMemosBySpace(focusedMemoSpace!.id);
+
+    // Load annotations for each memo
+    final annotations = <int, List<MemoAnnotation>>{};
+    for (final memo in memos) {
+      final memoAnnotations = await db.getAnnotationsByMemo(memo.id);
+      annotations[memo.id] = memoAnnotations;
+    }
+
+    if (mounted) {
+      setState(() {
+        _currentMemos = memos;
+        _annotations = annotations;
+        _memosLoading = false;
+      });
+    }
+  }
+
   // 검색 기능 메서드들
   void _toggleSearch() {
     setState(() {
@@ -80,7 +119,7 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   void _performSearch(String query) {
-    if (focusedMemoSpace == null || query.isEmpty) {
+    if (_currentMemos.isEmpty || query.isEmpty) {
       setState(() {
         _searchMatches.clear();
         _currentMatchIndex = -1;
@@ -88,23 +127,26 @@ class _MemoPageState extends State<MemoPage> {
       return;
     }
 
-    final text = focusedMemoSpace!.memo.toLowerCase();
     final searchQuery = query.toLowerCase();
-    final matches = <int>[];
+    final matches = <SearchMatch>[];
 
-    int index = 0;
-    while (true) {
-      index = text.indexOf(searchQuery, index);
-      if (index == -1) break;
-      matches.add(index);
-      index += 1;
+    for (int memoIdx = 0; memoIdx < _currentMemos.length; memoIdx++) {
+      final memo = _currentMemos[memoIdx];
+      final text = memo.content.toLowerCase();
+
+      int index = 0;
+      while (true) {
+        index = text.indexOf(searchQuery, index);
+        if (index == -1) break;
+        matches.add(SearchMatch(memoIndex: memoIdx, position: index));
+        index += 1;
+      }
     }
 
     setState(() {
       _searchMatches = matches;
       _currentMatchIndex = matches.isNotEmpty ? 0 : -1;
     });
-    // 검색어 입력 중에는 focus 이동 안 함 - Enter나 버튼 클릭 시에만 이동
   }
 
   void _nextMatch() {
@@ -112,63 +154,16 @@ class _MemoPageState extends State<MemoPage> {
     setState(() {
       _currentMatchIndex = (_currentMatchIndex + 1) % _searchMatches.length;
     });
-    _highlightMatch();
+    // TODO: Implement highlight in MemoEditor
   }
 
   void _previousMatch() {
     if (_searchMatches.isEmpty) return;
     setState(() {
-      _currentMatchIndex = (_currentMatchIndex - 1 + _searchMatches.length) % _searchMatches.length;
+      _currentMatchIndex = (_currentMatchIndex - 1 + _searchMatches.length) %
+          _searchMatches.length;
     });
-    _highlightMatch();
-  }
-
-  void _highlightMatch() {
-    if (_currentMatchIndex < 0 || focusedMemoSpace == null) return;
-    
-    final controller = _memoControllers[focusedMemoSpace!.id];
-    final focusNode = _memoFocusNodes[focusedMemoSpace!.id];
-    final scrollController = _memoScrollControllers[focusedMemoSpace!.id];
-    if (controller == null) return;
-
-    final matchStart = _searchMatches[_currentMatchIndex];
-    final matchEnd = matchStart + _searchController.text.length;
-
-    // 에디터에 focus를 줘야 selection이 보임
-    if (focusNode != null) {
-      focusNode.requestFocus();
-    }
-
-    // selection 설정
-    Future.delayed(const Duration(milliseconds: 30), () {
-      if (mounted) {
-        controller.selection = TextSelection(
-          baseOffset: matchStart,
-          extentOffset: matchEnd,
-        );
-      }
-    });
-    
-    // 스크롤 위치 계산 및 이동
-    if (scrollController != null && scrollController.hasClients) {
-      final text = controller.text.substring(0, matchStart);
-      final lineCount = '\n'.allMatches(text).length;
-      const lineHeight = 20.0; // 대략적인 줄 높이
-      final targetScroll = lineCount * lineHeight;
-      
-      final maxScroll = scrollController.position.maxScrollExtent;
-      final viewportHeight = scrollController.position.viewportDimension;
-      
-      // 현재 뷰포트에 보이지 않으면 스크롤
-      final currentScroll = scrollController.offset;
-      if (targetScroll < currentScroll || targetScroll > currentScroll + viewportHeight - 50) {
-        scrollController.animateTo(
-          (targetScroll - viewportHeight / 3).clamp(0.0, maxScroll),
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    }
+    // TODO: Implement highlight in MemoEditor
   }
 
   @override
@@ -176,15 +171,6 @@ class _MemoPageState extends State<MemoPage> {
     _tabScrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
-    for (var controller in _memoControllers.values) {
-      controller.dispose();
-    }
-    for (var focusNode in _memoFocusNodes.values) {
-      focusNode.dispose();
-    }
-    for (var scrollController in _memoScrollControllers.values) {
-      scrollController.dispose();
-    }
     super.dispose();
   }
 
@@ -196,6 +182,7 @@ class _MemoPageState extends State<MemoPage> {
     setState(() {
       focusedMemoSpace = memoSpace;
     });
+    _loadMemosForFocusedSpace();
   }
 
   void dragMemoSpace(int from, int to) {
@@ -228,6 +215,7 @@ class _MemoPageState extends State<MemoPage> {
         setFocusedMemoSpace(openedMemoSpaces[index - 1]);
       } else {
         focusedMemoSpace = null;
+        _currentMemos = [];
       }
     }
     memoSpace.opened = false;
@@ -246,11 +234,10 @@ class _MemoPageState extends State<MemoPage> {
     context.read<MemoSpaceDatabase>().readMemoSpaces();
   }
 
-  void updateMemoSpace(MemoSpace memoSpace) {
-    context.read<MemoSpaceDatabase>().updateMemoSpace(
+  void updateMemoSpaceName(MemoSpace memoSpace) {
+    context.read<MemoSpaceDatabase>().updateMemoSpaceName(
           memoSpace.id,
           memoSpace.name,
-          memoSpace.memo,
         );
   }
 
@@ -262,7 +249,7 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   void deleteMemoSpace(MemoSpace memoSpace) {
-    // 열려있는 탭이면 닫기 (updateMemoSpace 없이)
+    // 열려있는 탭이면 닫기
     final openedTab =
         openedMemoSpaces.where((m) => m.id == memoSpace.id).firstOrNull;
     if (openedTab != null) {
@@ -274,6 +261,7 @@ class _MemoPageState extends State<MemoPage> {
           setFocusedMemoSpace(openedMemoSpaces[index - 1]);
         } else {
           focusedMemoSpace = null;
+          _currentMemos = [];
         }
       }
       openedMemoSpaces.remove(openedTab);
@@ -284,14 +272,90 @@ class _MemoPageState extends State<MemoPage> {
     context.read<MemoSpaceDatabase>().deleteMemoSpace(memoSpace.id);
   }
 
-  SizedBox openedMemoSpaceTabs(
+  // Memo operations
+  Future<void> _onMemoChanged(int memoId, String content) async {
+    await context.read<MemoSpaceDatabase>().updateMemoContent(memoId, content);
+    // Update local state
+    final idx = _currentMemos.indexWhere((m) => m.id == memoId);
+    if (idx != -1) {
+      setState(() {
+        _currentMemos[idx].content = content;
+        _currentMemos[idx].updatedAt = DateTime.now();
+      });
+    }
+  }
+
+  Future<void> _onSplitMemo(
+      int memoId, String firstPart, String secondPart) async {
+    final db = context.read<MemoSpaceDatabase>();
+    await db.splitMemo(
+      memoId: memoId,
+      firstPart: firstPart,
+      secondPart: secondPart,
+    );
+
+    // Reload memos without showing loading indicator (prevents flicker)
+    if (focusedMemoSpace != null) {
+      final memos = await db.getMemosBySpace(focusedMemoSpace!.id);
+      if (mounted) {
+        setState(() {
+          _currentMemos = memos;
+        });
+      }
+    }
+  }
+
+  Future<void> _onMergeMemos(int firstMemoId, int secondMemoId) async {
+    final db = context.read<MemoSpaceDatabase>();
+    await db.mergeMemos(
+      firstMemoId: firstMemoId,
+      secondMemoId: secondMemoId,
+    );
+
+    // Reload memos without showing loading indicator (prevents flicker)
+    if (focusedMemoSpace != null) {
+      final memos = await db.getMemosBySpace(focusedMemoSpace!.id);
+      if (mounted) {
+        setState(() {
+          _currentMemos = memos;
+        });
+      }
+    }
+  }
+
+  // Toggle annotation style (bold, italic, etc.)
+  Future<void> _onToggleStyle(
+      int memoId, int start, int end, String type) async {
+    final db = context.read<MemoSpaceDatabase>();
+    await db.toggleAnnotation(
+      memoId: memoId,
+      startOffset: start,
+      endOffset: end,
+      type: type,
+    );
+
+    // Reload annotations for this memo
+    final updatedAnnotations = await db.getAnnotationsByMemo(memoId);
+    if (mounted) {
+      setState(() {
+        _annotations[memoId] = updatedAnnotations;
+      });
+    }
+  }
+
+  Widget openedMemoSpaceTabs(
       List<MemoSpace> openedMemoSpaces, MemoSpace? focusedMemoSpace) {
     if (openedMemoSpaces.isEmpty) {
-      return const SizedBox(
+      final borderColor =
+          Theme.of(context).colorScheme.inversePrimary.withOpacity(0.08);
+      final inactiveColor = Color.lerp(
+        Theme.of(context).colorScheme.surface,
+        Theme.of(context).colorScheme.primary,
+        0.4,
+      )!;
+      return SizedBox(
         height: 32,
-        child: Center(
-          child: Text('No memospace opened'),
-        ),
+        child: _buildAddButtonArea(borderColor, inactiveColor),
       );
     }
 
@@ -309,7 +373,8 @@ class _MemoPageState extends State<MemoPage> {
       Theme.of(context).colorScheme.primary,
       0.65,
     )!;
-    final borderColor = Theme.of(context).colorScheme.inversePrimary.withOpacity(0.08);
+    final borderColor =
+        Theme.of(context).colorScheme.inversePrimary.withOpacity(0.08);
 
     // 탭 decoration을 함수로 생성
     BoxDecoration getTabDecoration({
@@ -329,16 +394,20 @@ class _MemoPageState extends State<MemoPage> {
       if (isFirst) {
         return BoxDecoration(
           color: bgColor,
-          border: isFocused ? null : Border(
-            bottom: BorderSide(color: borderColor, width: 1),
-          ),
+          border: isFocused
+              ? null
+              : Border(
+                  bottom: BorderSide(color: borderColor, width: 1),
+                ),
         );
       } else {
         return BoxDecoration(
           color: bgColor,
           border: Border(
             left: BorderSide(color: borderColor, width: 1),
-            bottom: isFocused ? BorderSide.none : BorderSide(color: borderColor, width: 1),
+            bottom: isFocused
+                ? BorderSide.none
+                : BorderSide(color: borderColor, width: 1),
           ),
         );
       }
@@ -356,50 +425,68 @@ class _MemoPageState extends State<MemoPage> {
       ],
     );
 
-    const double minTabWidth = 120;
+    const double minTabWidth = 120; // 탭 최소 너비
+    const double maxTabWidth = 200; // 탭 최대 너비
+    const double addButtonWidth = 40; // + 버튼 영역 최소 너비
 
     return SizedBox(
       height: 32,
       width: double.infinity,
-      child: Row(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                // Top border (연한 색상)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    height: 1,
-                    color: borderColor,
-                  ),
-                ),
-                // Bottom border (연한 색상)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    height: 1,
-                    color: borderColor,
-                  ),
-                ),
-                // 탭 영역 (위 layer - bottom border를 덮을 수 있음)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 1,
-                  bottom: 0,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final double availableWidth = constraints.maxWidth;
-                      final double tabWidth =
-                          (availableWidth / openedMemoSpaces.length)
-                              .clamp(minTabWidth, double.infinity);
+      child: LayoutBuilder(
+        builder: (context, outerConstraints) {
+          final totalWidth = outerConstraints.maxWidth;
+          final availableForTabs = totalWidth - addButtonWidth;
+          final tabCount = openedMemoSpaces.length;
 
-                      return Scrollbar(
+          // 탭 너비 계산: 200px에서 시작해서 100px까지 줄어들 수 있음
+          double tabWidth =
+              (availableForTabs / tabCount).clamp(minTabWidth, maxTabWidth);
+
+          // 스크롤 필요 여부: 모든 탭이 minTabWidth일 때도 공간이 부족하면
+          final needsScroll = tabCount * minTabWidth > availableForTabs;
+          if (needsScroll) {
+            tabWidth = minTabWidth;
+          }
+
+          // 탭 영역의 실제 너비
+          final tabAreaWidth = needsScroll
+              ? availableForTabs // 스크롤 시 가용 공간 전체 사용
+              : tabWidth * tabCount; // 스크롤 없을 때 탭들의 총 너비
+
+          return Row(
+            children: [
+              // 탭 영역
+              SizedBox(
+                width: tabAreaWidth,
+                child: Stack(
+                  children: [
+                    // Top border
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        height: 1,
+                        color: borderColor,
+                      ),
+                    ),
+                    // Bottom border
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        height: 1,
+                        color: borderColor,
+                      ),
+                    ),
+                    // 탭 영역
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 1,
+                      bottom: 0,
+                      child: Scrollbar(
                         controller: _tabScrollController,
                         thumbVisibility: false,
                         thickness: 3,
@@ -408,7 +495,7 @@ class _MemoPageState extends State<MemoPage> {
                           controller: _tabScrollController,
                           scrollDirection: Axis.horizontal,
                           shrinkWrap: true,
-                          physics: const ClampingScrollPhysics(),
+                          physics: const BouncingScrollPhysics(),
                           itemCount: openedMemoSpaces.length,
                           itemBuilder: (context, i) {
                             bool isFocused =
@@ -417,152 +504,47 @@ class _MemoPageState extends State<MemoPage> {
                             return Align(
                               alignment: Alignment.topLeft,
                               child: DragTarget<int>(
-                              onAcceptWithDetails: (from) {
-                                dragMemoSpace(from.data, i);
-                              },
-                              builder: (context, candidateData, __) {
-                                final isDropTarget = candidateData.isNotEmpty &&
-                                    candidateData.first != i &&
-                                    candidateData.first != i - 1;
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // 드롭 위치 하이라이트 (왼쪽)
-                                    AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 150),
-                                      width: isDropTarget ? 3 : 0,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        color: isDropTarget
-                                            ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                    Draggable<int>(
-                                      data: i,
-                                      feedback: Material(
-                                        child: Container(
-                                          height: 32,
-                                          width: tabWidth,
-                                          decoration: draggedTab,
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              if (isFocused)
-                                                Expanded(
-                                                  child: TextField(
-                                                    controller:
-                                                        TextEditingController(
-                                                            text:
-                                                                openedMemoSpaces[
-                                                                        i]
-                                                                    .name),
-                                                    decoration:
-                                                        const InputDecoration(
-                                                      border: InputBorder.none,
-                                                      isDense: true,
-                                                      contentPadding:
-                                                          EdgeInsets.symmetric(
-                                                              vertical: 9),
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .inversePrimary,
-                                                    ),
-                                                  ),
-                                                )
-                                              else
-                                                TextButton(
-                                                  onPressed: () {
-                                                    setFocusedMemoSpace(
-                                                        openedMemoSpaces[i]);
-                                                  },
-                                                  child: Text(
-                                                    openedMemoSpaces[i].name,
-                                                    style: TextStyle(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .inversePrimary),
-                                                  ),
-                                                ),
-                                              IconButton(
-                                                icon: Icon(Icons.close,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .inversePrimary),
-                                                onPressed: () {},
-                                                iconSize: 16,
-                                                splashRadius: 20,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      childWhenDragging: Container(
-                                        height: 32,
-                                        width: tabWidth,
+                                onAcceptWithDetails: (from) {
+                                  dragMemoSpace(from.data, i);
+                                },
+                                builder: (context, candidateData, __) {
+                                  final isDropTarget =
+                                      candidateData.isNotEmpty &&
+                                          candidateData.first != i &&
+                                          candidateData.first != i - 1;
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // 드롭 위치 하이라이트 (왼쪽)
+                                      AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 150),
+                                        width: isDropTarget ? 3 : 0,
+                                        height: 24,
                                         decoration: BoxDecoration(
-                                          color: inactiveTabColor.withOpacity(0.5),
-                                          border: Border(
-                                            left: i == 0
-                                                ? BorderSide.none
-                                                : BorderSide(
-                                                    color: borderColor,
-                                                    width: 1,
-                                                  ),
-                                          ),
+                                          color: isDropTarget
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                              : Colors.transparent,
+                                          borderRadius:
+                                              BorderRadius.circular(2),
                                         ),
                                       ),
-                                      child: MouseRegion(
-                                        onEnter: (event) {
-                                          setState(() {
-                                            hovered[i] = true;
-                                          });
-                                        },
-                                        onExit: (event) {
-                                          setState(() {
-                                            hovered[i] = false;
-                                          });
-                                        },
-                                        child: Container(
-                                          width: tabWidth,
-                                          height: 31,
-                                          decoration: getTabDecoration(
-                                            isFirst: i == 0,
-                                            isFocused: isFocused,
-                                            isHovered: hovered[i],
-                                          ),
-                                          child: Stack(
-                                            alignment: Alignment.center,
-                                            children: [
-                                              // 탭 제목 (편집 모드)
-                                              if (editingTabId ==
-                                                  openedMemoSpaces[i].id)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          left: 17, right: 32),
-                                                  child: Focus(
-                                                    onFocusChange: (hasFocus) {
-                                                      if (!hasFocus) {
-                                                        updateMemoSpace(
-                                                            openedMemoSpaces[
-                                                                i]);
-                                                        setState(() {
-                                                          editingTabId = null;
-                                                        });
-                                                      }
-                                                    },
+                                      Draggable<int>(
+                                        data: i,
+                                        feedback: Material(
+                                          child: Container(
+                                            height: 32,
+                                            width: tabWidth,
+                                            decoration: draggedTab,
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                if (isFocused)
+                                                  Expanded(
                                                     child: TextField(
                                                       controller:
                                                           TextEditingController(
@@ -570,19 +552,6 @@ class _MemoPageState extends State<MemoPage> {
                                                                   openedMemoSpaces[
                                                                           i]
                                                                       .name),
-                                                      autofocus: true,
-                                                      onChanged: (text) {
-                                                        openedMemoSpaces[i]
-                                                            .name = text;
-                                                      },
-                                                      onSubmitted: (text) {
-                                                        updateMemoSpace(
-                                                            openedMemoSpaces[
-                                                                i]);
-                                                        setState(() {
-                                                          editingTabId = null;
-                                                        });
-                                                      },
                                                       decoration:
                                                           const InputDecoration(
                                                         border:
@@ -594,7 +563,8 @@ class _MemoPageState extends State<MemoPage> {
                                                                     vertical:
                                                                         9),
                                                       ),
-                                                      textAlign: TextAlign.left,
+                                                      textAlign:
+                                                          TextAlign.center,
                                                       style: TextStyle(
                                                         fontSize: 14,
                                                         fontWeight:
@@ -604,66 +574,133 @@ class _MemoPageState extends State<MemoPage> {
                                                             .inversePrimary,
                                                       ),
                                                     ),
-                                                  ),
-                                                )
-                                              // 탭 제목 (일반 모드)
-                                              else
-                                                Positioned.fill(
-                                                  child: GestureDetector(
-                                                    onTap: () {
-                                                      final now =
-                                                          DateTime.now();
-                                                      final tabId =
-                                                          openedMemoSpaces[i]
-                                                              .id;
-
-                                                      // 더블탭 감지 (300ms 이내 같은 탭 클릭)
-                                                      if (_lastTappedTabId ==
-                                                              tabId &&
-                                                          _lastTapTime !=
-                                                              null &&
-                                                          now
-                                                                  .difference(
-                                                                      _lastTapTime!)
-                                                                  .inMilliseconds <
-                                                              300) {
-                                                        // 더블탭 - 편집 모드
-                                                        setState(() {
-                                                          editingTabId = tabId;
-                                                        });
-                                                        _lastTappedTabId = null;
-                                                        _lastTapTime = null;
-                                                      } else {
-                                                        // 싱글탭 - 포커스 이동
-                                                        setFocusedMemoSpace(
-                                                            openedMemoSpaces[
-                                                                i]);
-                                                        _lastTappedTabId =
-                                                            tabId;
-                                                        _lastTapTime = now;
-                                                      }
+                                                  )
+                                                else
+                                                  TextButton(
+                                                    onPressed: () {
+                                                      setFocusedMemoSpace(
+                                                          openedMemoSpaces[i]);
                                                     },
-                                                    child: Container(
-                                                      color: Colors.transparent,
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                              left: 17,
-                                                              right: 32),
-                                                      alignment:
-                                                          Alignment.centerLeft,
-                                                      child: Text(
-                                                        openedMemoSpaces[i]
-                                                            .name,
+                                                    child: Text(
+                                                      openedMemoSpaces[i].name,
+                                                      style: TextStyle(
+                                                          color: Theme.of(
+                                                                  context)
+                                                              .colorScheme
+                                                              .inversePrimary),
+                                                    ),
+                                                  ),
+                                                IconButton(
+                                                  icon: Icon(Icons.close,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .inversePrimary),
+                                                  onPressed: () {},
+                                                  iconSize: 16,
+                                                  splashRadius: 20,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        childWhenDragging: Container(
+                                          height: 32,
+                                          width: tabWidth,
+                                          decoration: BoxDecoration(
+                                            color: inactiveTabColor
+                                                .withOpacity(0.5),
+                                            border: Border(
+                                              left: i == 0
+                                                  ? BorderSide.none
+                                                  : BorderSide(
+                                                      color: borderColor,
+                                                      width: 1,
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
+                                        child: MouseRegion(
+                                          onEnter: (event) {
+                                            setState(() {
+                                              hovered[i] = true;
+                                            });
+                                          },
+                                          onExit: (event) {
+                                            setState(() {
+                                              hovered[i] = false;
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                                milliseconds: 150),
+                                            curve: Curves.easeOutCubic,
+                                            width: tabWidth,
+                                            height: 31,
+                                            decoration: getTabDecoration(
+                                              isFirst: i == 0,
+                                              isFocused: isFocused,
+                                              isHovered: hovered[i],
+                                            ),
+                                            child: Stack(
+                                              alignment: Alignment.center,
+                                              children: [
+                                                // 탭 제목 (편집 모드)
+                                                if (editingTabId ==
+                                                    openedMemoSpaces[i].id)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            left: 17,
+                                                            right: 32),
+                                                    child: Focus(
+                                                      onFocusChange:
+                                                          (hasFocus) {
+                                                        if (!hasFocus) {
+                                                          updateMemoSpaceName(
+                                                              openedMemoSpaces[
+                                                                  i]);
+                                                          setState(() {
+                                                            editingTabId = null;
+                                                          });
+                                                        }
+                                                      },
+                                                      child: TextField(
+                                                        controller:
+                                                            TextEditingController(
+                                                                text:
+                                                                    openedMemoSpaces[
+                                                                            i]
+                                                                        .name),
+                                                        autofocus: true,
+                                                        onChanged: (text) {
+                                                          openedMemoSpaces[i]
+                                                              .name = text;
+                                                        },
+                                                        onSubmitted: (text) {
+                                                          updateMemoSpaceName(
+                                                              openedMemoSpaces[
+                                                                  i]);
+                                                          setState(() {
+                                                            editingTabId = null;
+                                                          });
+                                                        },
+                                                        decoration:
+                                                            const InputDecoration(
+                                                          border:
+                                                              InputBorder.none,
+                                                          isDense: true,
+                                                          contentPadding:
+                                                              EdgeInsets
+                                                                  .symmetric(
+                                                                      vertical:
+                                                                          9),
+                                                        ),
                                                         textAlign:
                                                             TextAlign.left,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
                                                         style: TextStyle(
                                                           fontSize: 14,
-                                                          fontWeight: isFocused
-                                                              ? FontWeight.w700
-                                                              : FontWeight
-                                                                  .normal,
+                                                          fontWeight:
+                                                              FontWeight.w700,
                                                           color: Theme.of(
                                                                   context)
                                                               .colorScheme
@@ -671,110 +708,151 @@ class _MemoPageState extends State<MemoPage> {
                                                         ),
                                                       ),
                                                     ),
+                                                  )
+                                                // 탭 제목 (일반 모드)
+                                                else
+                                                  Positioned.fill(
+                                                    child: GestureDetector(
+                                                      onTap: () {
+                                                        final now =
+                                                            DateTime.now();
+                                                        final tabId =
+                                                            openedMemoSpaces[i]
+                                                                .id;
+
+                                                        // 더블탭 감지 (300ms 이내 같은 탭 클릭)
+                                                        if (_lastTappedTabId ==
+                                                                tabId &&
+                                                            _lastTapTime !=
+                                                                null &&
+                                                            now
+                                                                    .difference(
+                                                                        _lastTapTime!)
+                                                                    .inMilliseconds <
+                                                                300) {
+                                                          // 더블탭 - 편집 모드
+                                                          setState(() {
+                                                            editingTabId =
+                                                                tabId;
+                                                          });
+                                                          _lastTappedTabId =
+                                                              null;
+                                                          _lastTapTime = null;
+                                                        } else {
+                                                          // 싱글탭 - 포커스 이동
+                                                          setFocusedMemoSpace(
+                                                              openedMemoSpaces[
+                                                                  i]);
+                                                          _lastTappedTabId =
+                                                              tabId;
+                                                          _lastTapTime = now;
+                                                        }
+                                                      },
+                                                      child: Container(
+                                                        color:
+                                                            Colors.transparent,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(
+                                                                left: 17,
+                                                                right: 32),
+                                                        alignment: Alignment
+                                                            .centerLeft,
+                                                        child: Text(
+                                                          openedMemoSpaces[i]
+                                                              .name,
+                                                          textAlign:
+                                                              TextAlign.left,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                isFocused
+                                                                    ? FontWeight
+                                                                        .w700
+                                                                    : FontWeight
+                                                                        .normal,
+                                                            color: Theme.of(
+                                                                    context)
+                                                                .colorScheme
+                                                                .inversePrimary,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                // X 버튼 (오른쪽 고정)
+                                                Positioned(
+                                                  right: 0,
+                                                  child: Opacity(
+                                                    opacity: (isFocused ||
+                                                            hovered[i])
+                                                        ? 1.0
+                                                        : 0.0,
+                                                    child: closeMemoSpaceButton(
+                                                        openedMemoSpaces[i]),
                                                   ),
                                                 ),
-                                              // X 버튼 (오른쪽 고정)
-                                              Positioned(
-                                                right: 0,
-                                                child: Opacity(
-                                                  opacity:
-                                                      (isFocused || hovered[i])
-                                                          ? 1.0
-                                                          : 0.0,
-                                                  child: closeMemoSpaceButton(
-                                                      openedMemoSpaces[i]),
-                                                ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                );
-                              },
+                                    ],
+                                  );
+                                },
                               ),
                             );
                           },
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          createMemoSpaceButton(),
-        ],
+              ),
+              // + 버튼 영역 - 나머지 공간 차지 (노션 스타일)
+              Expanded(
+                child: _buildAddButtonArea(borderColor, inactiveTabColor),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAddButtonArea(Color borderColor, Color backgroundColor) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        border: Border(
+          top: BorderSide(color: borderColor, width: 1),
+          bottom: BorderSide(color: borderColor, width: 1),
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _AddTabButton(
+          onTap: createMemoSpace,
+          borderColor: borderColor,
+        ),
       ),
     );
   }
 
   Widget closeMemoSpaceButton(MemoSpace memoSpace) {
-    return SizedBox(
-      width: 28,
-      height: 28,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => closeMemoSpace(memoSpace),
-          child: const Center(
-            child: Icon(Icons.close, size: 14),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget createMemoSpaceButton() {
-    final borderColor = Theme.of(context).colorScheme.inversePrimary.withOpacity(0.08);
-    final inactiveColor = Color.lerp(
-      Theme.of(context).colorScheme.surface,
-      Theme.of(context).colorScheme.primary,
-      0.4,
-    )!;
-    return Container(
-      height: 32,
-      width: 34,
-      decoration: BoxDecoration(
-        color: inactiveColor,
-        border: Border(
-          top: BorderSide(
-            color: borderColor,
-            width: 1,
-          ),
-          bottom: BorderSide(
-            color: borderColor,
-            width: 1,
-          ),
-          left: BorderSide(
-            color: borderColor,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: createMemoSpace,
-          child: Center(
-            child: Icon(
-              Icons.add, 
-              size: 16,
-              color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.5),
-            ),
-          ),
-        ),
-      ),
+    return _HoverScaleButton(
+      onTap: () => closeMemoSpace(memoSpace),
+      child: const Icon(Icons.close, size: 14),
     );
   }
 
   Widget _buildSearchBar() {
     final colorScheme = Theme.of(context).colorScheme;
     final borderColor = colorScheme.inversePrimary.withOpacity(0.08);
-    
+
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -859,7 +937,8 @@ class _MemoPageState extends State<MemoPage> {
             child: Icon(
               icon,
               size: 16,
-              color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.6),
+              color:
+                  Theme.of(context).colorScheme.inversePrimary.withOpacity(0.6),
             ),
           ),
         ),
@@ -867,7 +946,7 @@ class _MemoPageState extends State<MemoPage> {
     );
   }
 
-  Expanded focusedMemoEditor(MemoSpace? focusedMemoSpace) {
+  Widget focusedMemoEditor(MemoSpace? focusedMemoSpace) {
     if (focusedMemoSpace == null) {
       return const Expanded(
         child: Center(
@@ -876,74 +955,43 @@ class _MemoPageState extends State<MemoPage> {
       );
     }
 
-    // 캐싱된 controller 사용 또는 새로 생성
-    TextEditingController controller;
-    if (_memoControllers.containsKey(focusedMemoSpace.id)) {
-      controller = _memoControllers[focusedMemoSpace.id]!;
-      // 텍스트가 변경되었으면 업데이트
-      if (controller.text != focusedMemoSpace.memo) {
-        controller.text = focusedMemoSpace.memo;
-      }
-    } else {
-      controller = TextEditingController(text: focusedMemoSpace.memo);
-      _memoControllers[focusedMemoSpace.id] = controller;
+    if (_memosLoading) {
+      return const Expanded(
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
-    // 캐싱된 FocusNode 사용 또는 새로 생성
-    FocusNode focusNode;
-    if (_memoFocusNodes.containsKey(focusedMemoSpace.id)) {
-      focusNode = _memoFocusNodes[focusedMemoSpace.id]!;
-    } else {
-      focusNode = FocusNode();
-      _memoFocusNodes[focusedMemoSpace.id] = focusNode;
-    }
-
-    // 캐싱된 ScrollController 사용 또는 새로 생성
-    ScrollController scrollController;
-    if (_memoScrollControllers.containsKey(focusedMemoSpace.id)) {
-      scrollController = _memoScrollControllers[focusedMemoSpace.id]!;
-    } else {
-      scrollController = ScrollController();
-      _memoScrollControllers[focusedMemoSpace.id] = scrollController;
-    }
-
-    TextSelection? savedPosition = textEditorPositions[focusedMemoSpace.id];
-    if (savedPosition != null) {
-      int maxOffset = focusedMemoSpace.memo.length;
-      controller.selection = TextSelection(
-        baseOffset: savedPosition.baseOffset.clamp(0, maxOffset),
-        extentOffset: savedPosition.extentOffset.clamp(0, maxOffset),
+    if (_currentMemos.isEmpty) {
+      // Trigger load if memos are empty
+      Future.microtask(_loadMemosForFocusedSpace);
+      return const Expanded(
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
     return Expanded(
       flex: 10,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: AutocompleteTextField(
+        color: Colors.transparent,
+        child: MemoEditor(
+          key: ValueKey('memo_editor_${focusedMemoSpace.id}'),
+          memos: _currentMemos,
+          annotations: _annotations,
+          completionService: _completionService,
           style: TextStyle(
             color: Theme.of(context).colorScheme.inversePrimary,
             fontSize: 14,
-            height: 1.5, // 줄 높이
+            height: 1.5,
             leadingDistribution: TextLeadingDistribution.even,
           ),
-          controller: controller,
-          focusNode: focusNode,
-          scrollController: scrollController,
-          completionService: _completionService,
-          onChanged: (text) {
-            focusedMemoSpace.memo = text;
-            if (timer?.isActive ?? false) timer?.cancel();
-            timer = Timer(const Duration(seconds: 1), () {
-              textEditorPositions[focusedMemoSpace.id] = controller.selection;
-              updateMemoSpace(focusedMemoSpace);
-            });
-          },
-          maxLines: null,
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-          ),
-          autofocus: true,
+          onMemoChanged: _onMemoChanged,
+          onSplitMemo: _onSplitMemo,
+          onMergeMemos: _onMergeMemos,
+          onToggleStyle: _onToggleStyle,
         ),
       ),
     );
@@ -968,6 +1016,8 @@ class _MemoPageState extends State<MemoPage> {
     if (focusedMemoSpace == null) {
       if (openedMemoSpaces.isNotEmpty) {
         focusedMemoSpace = openedMemoSpaces.first;
+        // Load memos for the initial focused space
+        Future.microtask(_loadMemosForFocusedSpace);
       }
     }
 
@@ -1006,12 +1056,14 @@ class _MemoPageState extends State<MemoPage> {
                 return KeyEventResult.handled;
               }
               // Escape : 검색 닫기
-              if (event.logicalKey == LogicalKeyboardKey.escape && _isSearching) {
+              if (event.logicalKey == LogicalKeyboardKey.escape &&
+                  _isSearching) {
                 _toggleSearch();
                 return KeyEventResult.handled;
               }
               // 검색 모드에서 Enter : 다음/이전 검색 결과로 이동
-              if (_isSearching && _searchMatches.isNotEmpty &&
+              if (_isSearching &&
+                  _searchMatches.isNotEmpty &&
                   event.logicalKey == LogicalKeyboardKey.enter) {
                 if (HardwareKeyboard.instance.isShiftPressed) {
                   _previousMatch();
@@ -1051,6 +1103,9 @@ class _MemoPageState extends State<MemoPage> {
           return KeyEventResult.ignored;
         },
         child: Scaffold(
+          // Drawer animation improvements
+          drawerEdgeDragWidth: 60, // Wider swipe area for easier access
+          drawerScrimColor: Colors.black.withOpacity(0.3), // Subtler backdrop
           appBar: AppBar(
             elevation: 0,
             toolbarHeight: 40,
@@ -1089,6 +1144,139 @@ class _MemoPageState extends State<MemoPage> {
               if (_isSearching) _buildSearchBar(),
               focusedMemoEditor(focusedMemoSpace),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Represents a search match position
+class SearchMatch {
+  final int memoIndex;
+  final int position;
+
+  SearchMatch({required this.memoIndex, required this.position});
+}
+
+/// A button with hover and press scale animation
+class _HoverScaleButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+  final Color? hoverColor;
+
+  const _HoverScaleButton({
+    required this.onTap,
+    required this.child,
+    this.hoverColor,
+  });
+
+  @override
+  State<_HoverScaleButton> createState() => _HoverScaleButtonState();
+}
+
+class _HoverScaleButtonState extends State<_HoverScaleButton> {
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() {
+        _isHovered = false;
+        _isPressed = false;
+      }),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) => setState(() => _isPressed = false),
+        onTapCancel: () => setState(() => _isPressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 100),
+          scale: _isPressed ? 0.9 : 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? (widget.hoverColor ??
+                      colorScheme.inversePrimary.withOpacity(0.1))
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(child: widget.child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Add tab button with hover effect
+class _AddTabButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Color borderColor;
+
+  const _AddTabButton({
+    required this.onTap,
+    required this.borderColor,
+  });
+
+  @override
+  State<_AddTabButton> createState() => _AddTabButtonState();
+}
+
+class _AddTabButtonState extends State<_AddTabButton> {
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() {
+        _isHovered = false;
+        _isPressed = false;
+      }),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) => setState(() => _isPressed = false),
+        onTapCancel: () => setState(() => _isPressed = false),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          width: 34,
+          height: 32,
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? colorScheme.inversePrimary.withOpacity(0.08)
+                : Colors.transparent,
+            border: Border(
+              left: BorderSide(color: widget.borderColor, width: 1),
+            ),
+          ),
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 100),
+            scale: _isPressed ? 0.85 : 1.0,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                child: Icon(
+                  Icons.add,
+                  size: 16,
+                  color: _isHovered
+                      ? colorScheme.inversePrimary.withOpacity(0.8)
+                      : colorScheme.inversePrimary.withOpacity(0.5),
+                ),
+              ),
+            ),
           ),
         ),
       ),

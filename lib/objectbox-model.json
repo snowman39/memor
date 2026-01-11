@@ -1,0 +1,192 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:3619786474663355254",
+      "lastPropertyId": "9:448848594849084608",
+      "name": "Memo",
+      "properties": [
+        {
+          "id": "1:7866426841083754578",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6523535534465401202",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "1:1618732804066762906"
+        },
+        {
+          "id": "3:5124437470914463588",
+          "name": "content",
+          "type": 9
+        },
+        {
+          "id": "4:8821463411422235851",
+          "name": "order",
+          "type": 6
+        },
+        {
+          "id": "5:5950445746345696126",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "6:1251134166518726709",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "7:4153634926445462919",
+          "name": "deletedAt",
+          "type": 10
+        },
+        {
+          "id": "8:3066971873439819002",
+          "name": "version",
+          "type": 6
+        },
+        {
+          "id": "9:448848594849084608",
+          "name": "memoSpaceId",
+          "type": 11,
+          "flags": 520,
+          "indexId": "2:2772776519555991962",
+          "relationTarget": "MemoSpace"
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:5723818514345253478",
+      "lastPropertyId": "9:311306172550151691",
+      "name": "MemoSpace",
+      "properties": [
+        {
+          "id": "1:2896873049959732990",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2708095340179127471",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "3:7949768650164187234"
+        },
+        {
+          "id": "3:7583970680207265551",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "4:5826931119400032624",
+          "name": "legacyMemo",
+          "type": 9
+        },
+        {
+          "id": "5:4358746528816006124",
+          "name": "opened",
+          "type": 1
+        },
+        {
+          "id": "6:2003961297809686401",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "7:4172461422456314855",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "8:8279576259353283395",
+          "name": "deletedAt",
+          "type": 10
+        },
+        {
+          "id": "9:311306172550151691",
+          "name": "version",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:8870753223861766809",
+      "lastPropertyId": "9:7136005943150079558",
+      "name": "MemoAnnotation",
+      "properties": [
+        {
+          "id": "1:3469065814669522110",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:9087770000339728175",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "4:7928952671465296124"
+        },
+        {
+          "id": "3:7628407310853776417",
+          "name": "startOffset",
+          "type": 6
+        },
+        {
+          "id": "4:5168676126797109900",
+          "name": "endOffset",
+          "type": 6
+        },
+        {
+          "id": "5:60503629625529690",
+          "name": "type",
+          "type": 9
+        },
+        {
+          "id": "6:4420092240150998277",
+          "name": "metadata",
+          "type": 9
+        },
+        {
+          "id": "7:2555225552797260535",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "8:6677816046767758137",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "9:7136005943150079558",
+          "name": "memoId",
+          "type": 11,
+          "flags": 520,
+          "indexId": "5:1300961424400650137",
+          "relationTarget": "Memo"
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "3:8870753223861766809",
+  "lastIndexId": "5:1300961424400650137",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

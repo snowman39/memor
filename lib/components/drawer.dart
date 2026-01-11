@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:memor/components/drawer_tile.dart';
 import 'package:memor/models/memo_space.dart';
 import 'package:memor/pages/settings_page.dart';
+import 'package:memor/theme/theme.dart';
 import 'package:memor/theme/theme_provider.dart';
 
 class MyDrawer extends StatelessWidget {
@@ -19,23 +20,12 @@ class MyDrawer extends StatelessWidget {
       required this.onDelete,
       this.onSettingsChanged});
 
-  List<DrawerTile> renderMemoSpaces() {
+  List<DrawerTile> renderMemoSpaces(BuildContext context) {
     return memoSpaces
         .map((memoSpace) => DrawerTile(
               title: memoSpace.name,
-              trailing: SizedBox(
-                width: 28,
-                height: 28,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => onDelete!(memoSpace),
-                    child: const Center(
-                      child: Icon(Icons.delete, size: 16),
-                    ),
-                  ),
-                ),
+              trailing: _DeleteButton(
+                onTap: () => onDelete!(memoSpace),
               ),
               onTap: () => onTap!(memoSpace),
             ))
@@ -52,15 +42,24 @@ class MyDrawer extends StatelessWidget {
     )!;
     
     return Drawer(
+        width: 280,
         backgroundColor: drawerColor,
         surfaceTintColor: Colors.transparent,
-        shape: const BeveledRectangleBorder(),
+        shape: const RoundedRectangleBorder(), // Clean flat edge
         child: Column(
           children: [
-            const SizedBox(
-              height: 20,
+            const SizedBox(height: 20),
+            // Scrollable memo spaces list
+            Expanded(
+              child: ListView(
+                physics: const NativeScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: EdgeInsets.zero,
+                children: renderMemoSpaces(context),
+              ),
             ),
-            ...renderMemoSpaces(),
+            // Fixed bottom section
             Divider(
               color: Theme.of(context).colorScheme.inversePrimary.withOpacity(0.1),
               thickness: 1,
@@ -96,8 +95,75 @@ class MyDrawer extends StatelessWidget {
                   onSettingsChanged?.call();
                 });
               },
-            )
+            ),
+            const SizedBox(height: 20),
           ],
         ));
+  }
+}
+
+/// Delete button with red hover hint
+class _DeleteButton extends StatefulWidget {
+  final VoidCallback onTap;
+
+  const _DeleteButton({required this.onTap});
+
+  @override
+  State<_DeleteButton> createState() => _DeleteButtonState();
+}
+
+class _DeleteButtonState extends State<_DeleteButton> {
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() {
+        _isHovered = false;
+        _isPressed = false;
+      }),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) => setState(() => _isPressed = false),
+        onTapCancel: () => setState(() => _isPressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 100),
+          scale: _isPressed ? 0.85 : 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? Colors.red.withOpacity(0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 150),
+                style: TextStyle(
+                  color: _isHovered
+                      ? Colors.red.shade400
+                      : colorScheme.inversePrimary.withOpacity(0.6),
+                ),
+                child: Icon(
+                  Icons.delete_outline,
+                  size: 16,
+                  color: _isHovered
+                      ? Colors.red.shade400
+                      : colorScheme.inversePrimary.withOpacity(0.6),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
